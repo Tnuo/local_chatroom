@@ -1,0 +1,13 @@
+services:
+  chatroom:
+    build: .
+    container_name: local-chatroom
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - ./config:/app/config:ro
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production

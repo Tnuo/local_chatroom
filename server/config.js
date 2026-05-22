@@ -1,0 +1,43 @@
+const fs = require('fs');
+const yaml = require('js-yaml');
+const { CONFIG_PATH } = require('./paths');
+
+let _config = null;
+
+function loadConfig() {
+  if (fs.existsSync(CONFIG_PATH)) {
+    _config = yaml.load(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  } else {
+    _config = getDefaults();
+  }
+  return _config;
+}
+
+function getDefaults() {
+  return {
+    server: { port: 3000, upload_limit: 52428800 },
+    message: { retention_days: 30, cleanup_time: '03:00' },
+    rooms: { default: '大厅', max_rooms: 20 },
+    files: {
+      allowed_extensions: [
+        '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg',
+        '.mp4', '.webm', '.mp3', '.wav', '.ogg',
+        '.pdf', '.zip', '.rar', '.7z',
+        '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+        '.txt', '.md'
+      ]
+    }
+  };
+}
+
+function getConfig() {
+  if (!_config) loadConfig();
+  return _config;
+}
+
+function reloadConfig() {
+  _config = null;
+  return loadConfig();
+}
+
+module.exports = { getConfig, reloadConfig };
