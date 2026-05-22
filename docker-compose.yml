@@ -1,8 +1,6 @@
 services:
   chatroom:
-    build:
-      context: .
-      pull: false
+    build: .
     container_name: local-chatroom
     ports:
       - "${PORT:-3000}:3000"
