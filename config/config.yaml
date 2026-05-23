@@ -1,7 +1,7 @@
 server:
   port: 3000
-  upload_limit: 52428800
-
+  upload_limit: 2147483648
+  
 message:
   retention_days: 30
   cleanup_time: "03:00"
