@@ -47,7 +47,7 @@
 </script>
 
 <div class="msg-row" class:mine={isMine} id="msg-{msg.id}">
-  {#if !isMine}
+  {#if isMine}
     <div class="msg-avatar" style="background: {msg.user_avatar_color || '#6366f1'}">
       {msg.user_nickname?.charAt(0) || '?'}
     </div>
@@ -103,7 +103,7 @@
     </div>
   </div>
 
-  {#if isMine}
+  {#if !isMine}
     <div class="msg-avatar" style="background: {msg.user_avatar_color || '#6366f1'}">
       {msg.user_nickname?.charAt(0) || '?'}
     </div>
@@ -189,9 +189,9 @@
   }
 
   .msg-image {
-    max-width: 280px;
-    max-height: 300px;
-    border-radius: 10px;
+    max-width: 260px;
+    max-height: 280px;
+    border-radius: 8px;
     object-fit: cover;
     display: block;
     transition: opacity 0.15s;
@@ -203,11 +203,6 @@
     padding: 0;
     cursor: pointer;
     display: block;
-    margin: -8px -14px 4px -14px;
-  }
-
-  .bubble.mine .media-trigger {
-    margin: -8px -14px 4px -14px;
   }
 
   .media-trigger:hover .msg-image {
@@ -215,15 +210,10 @@
   }
 
   .msg-video {
-    max-width: 280px;
-    max-height: 300px;
-    border-radius: 10px;
+    max-width: 260px;
+    max-height: 280px;
+    border-radius: 8px;
     background: #000;
-    margin: -8px -14px 4px -14px;
-  }
-
-  .bubble.mine .msg-video {
-    margin: -8px -14px 4px -14px;
   }
 
   .file-card {
@@ -368,14 +358,12 @@
 
     .msg-image {
       max-width: 100%;
-      max-height: 260px;
-      margin: -8px -12px 4px -12px;
+      max-height: 240px;
     }
 
     .msg-video {
       max-width: 100%;
-      max-height: 260px;
-      margin: -8px -12px 4px -12px;
+      max-height: 240px;
     }
 
     .msg-avatar {

@@ -31,6 +31,12 @@
     </svg>
   </button>
 
+  <a class="download-btn" href={src} download title="下载文件" aria-label="下载文件">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+  </a>
+
   <div class="lightbox-content">
     {#if type === 'image' || (!type && src.match(/\.(jpg|jpeg|png|gif|webp|svg)/i))}
       <img src={src} alt="" class="preview-image" />
@@ -88,6 +94,28 @@
 
   .close-btn:hover { background: rgba(255,255,255,0.25); }
 
+  .download-btn {
+    position: absolute;
+    top: 16px;
+    right: 72px;
+    z-index: 501;
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 10px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    backdrop-filter: blur(8px);
+    text-decoration: none;
+  }
+
+  .download-btn:hover { background: rgba(255,255,255,0.25); }
+
   .lightbox-content {
     max-width: 95vw;
     max-height: 95vh;
@@ -104,6 +132,7 @@
     object-fit: contain;
     border-radius: 4px;
     box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+    -webkit-touch-callout: default;
   }
 
   .preview-video {
@@ -151,6 +180,10 @@
     .close-btn {
       top: 8px;
       right: 8px;
+    }
+    .download-btn {
+      top: 8px;
+      right: 60px;
     }
   }
 </style>

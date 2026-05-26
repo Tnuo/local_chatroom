@@ -40,9 +40,11 @@ router.post('/', upload.single('file'), (req, res) => {
     return res.status(400).json({ error: '没有上传文件' });
   }
 
+  const originalName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+
   res.json({
     filename: req.file.filename,
-    originalname: req.file.originalname,
+    originalname: originalName,
     size: req.file.size,
     mimetype: req.file.mimetype
   });
