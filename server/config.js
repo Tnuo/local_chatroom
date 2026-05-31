@@ -40,4 +40,17 @@ function reloadConfig() {
   return loadConfig();
 }
 
-module.exports = { getConfig, reloadConfig };
+function saveConfig(updates) {
+  const config = getConfig();
+  const merged = {
+    server: { ...config.server, ...(updates.server || {}) },
+    message: { ...config.message, ...(updates.message || {}) },
+    rooms: { ...config.rooms, ...(updates.rooms || {}) },
+    files: { ...config.files, ...(updates.files || {}) }
+  };
+  fs.writeFileSync(CONFIG_PATH, yaml.dump(merged, { lineWidth: -1 }), 'utf8');
+  _config = merged;
+  return merged;
+}
+
+module.exports = { getConfig, reloadConfig, saveConfig };

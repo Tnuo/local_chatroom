@@ -14,6 +14,9 @@
 
   let messageContainer;
   let autoScroll = true;
+  let dragOver = false;
+
+  $: if (roomId) { autoScroll = true; }
 
   function handleScroll() {
     if (!messageContainer) return;
@@ -23,7 +26,9 @@
 
   afterUpdate(() => {
     if (autoScroll && messageContainer) {
-      messageContainer.scrollTop = messageContainer.scrollHeight;
+      requestAnimationFrame(() => {
+        messageContainer.scrollTop = messageContainer.scrollHeight;
+      });
     }
   });
 
@@ -38,6 +43,67 @@
     return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
   }
 
+  function determineType(mime) {
+    if (!mime) return 'file';
+    if (mime.startsWith('image/')) return 'image';
+    if (mime.startsWith('video/')) return 'video';
+    if (mime.startsWith('audio/')) return 'audio';
+    return 'file';
+  }
+
+  async function uploadFile(file) {
+    const resp = await fetch('/api/config');
+    const config = await resp.json();
+    const limit = config.server?.upload_limit || 52428800;
+
+    if (file.size > limit) {
+      alert(`文件 "${file.name}" 超过大小限制`);
+      return null;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      return data;
+    } catch (e) {
+      alert('上传失败: ' + e.message);
+      return null;
+    }
+  }
+
+  async function handleDrop(e) {
+    e.preventDefault();
+    dragOver = false;
+    for (const item of e.dataTransfer.items) {
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        const uploaded = await uploadFile(file);
+        if (uploaded) {
+          onSend?.({
+            type: determineType(file.type),
+            content: '',
+            file: uploaded
+          });
+        }
+      }
+    }
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    dragOver = true;
+  }
+
+  function handleDragLeave(e) {
+    if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget)) {
+      dragOver = false;
+    }
+  }
+
   $: messagesWithDates = (() => {
     let lastDate = '';
     return messages.map(msg => {
@@ -50,7 +116,15 @@
 </script>
 
 <div class="chat-room">
-  <div class="messages-container" bind:this={messageContainer} on:scroll={handleScroll}>
+  <div
+    class="messages-container"
+    class:drag-over={dragOver}
+    bind:this={messageContainer}
+    on:scroll={handleScroll}
+    on:dragover={handleDragOver}
+    on:dragleave={handleDragLeave}
+    on:drop={handleDrop}
+  >
     {#if messages.length === 0}
       <div class="empty-chat">
         <div class="empty-icon">💬</div>
@@ -93,6 +167,13 @@
     overflow-y: auto;
     padding: 8px 0;
     -webkit-overflow-scrolling: touch;
+    transition: background 0.15s;
+  }
+
+  .messages-container.drag-over {
+    background: rgba(99, 102, 241, 0.06);
+    outline: 2px dashed #6366f1;
+    outline-offset: -2px;
   }
 
   .empty-chat {
@@ -100,7 +181,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    flex: 1;
+    height: 100%;
     color: #9ca3af;
     gap: 12px;
   }
