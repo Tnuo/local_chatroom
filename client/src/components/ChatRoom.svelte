@@ -1,5 +1,5 @@
 <script>
-  import { afterUpdate } from 'svelte';
+  import { afterUpdate, tick } from 'svelte';
   import MessageBubble from './MessageBubble.svelte';
   import MessageInput from './MessageInput.svelte';
 
@@ -15,19 +15,30 @@
   let messageContainer;
   let autoScroll = true;
   let dragOver = false;
+  let bottomAnchor;
 
   $: if (roomId) { autoScroll = true; }
 
   function handleScroll() {
     if (!messageContainer) return;
     const { scrollTop, scrollHeight, clientHeight } = messageContainer;
-    autoScroll = scrollHeight - scrollTop - clientHeight < 100;
+    autoScroll = scrollHeight - scrollTop - clientHeight < 120;
+  }
+
+  function scrollToBottom() {
+    if (!autoScroll || !messageContainer) return;
+    bottomAnchor?.scrollIntoView({ block: 'end' });
   }
 
   afterUpdate(() => {
-    if (autoScroll && messageContainer) {
-      requestAnimationFrame(() => {
-        messageContainer.scrollTop = messageContainer.scrollHeight;
+    if (autoScroll) {
+      tick().then(() => {
+        scrollToBottom();
+        requestAnimationFrame(() => {
+          scrollToBottom();
+          setTimeout(() => scrollToBottom(), 200);
+          setTimeout(() => scrollToBottom(), 600);
+        });
       });
     }
   });
@@ -148,6 +159,7 @@
         {isMobile}
       />
     {/each}
+    <div bind:this={bottomAnchor}></div>
   </div>
 
   <MessageInput {onSend} {roomId} {isMobile} />

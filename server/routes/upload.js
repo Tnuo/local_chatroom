@@ -17,25 +17,28 @@ const storage = multer.diskStorage({
   }
 });
 
-const config = getConfig();
+function createUpload() {
+  const config = getConfig();
+  return multer({
+    storage,
+    fileFilter: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const allowed = config.files?.allowed_extensions || [];
+      if (allowed.length === 0 || allowed.includes(ext)) {
+        cb(null, true);
+      } else {
+        cb(new Error(`文件类型 ${ext} 不被允许`));
+      }
+    },
+    limits: { fileSize: config.server?.upload_limit || 52428800 }
+  });
+}
 
-const fileFilter = (_req, file, cb) => {
-  const ext = path.extname(file.originalname).toLowerCase();
-  const allowed = config.files?.allowed_extensions || [];
-  if (allowed.includes(ext) || allowed.length === 0) {
-    cb(null, true);
-  } else {
-    cb(new Error(`文件类型 ${ext} 不被允许`));
-  }
-};
-
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: { fileSize: config.server?.upload_limit || 52428800 }
+router.post('/', (req, res, next) => {
+  createUpload().single('file')(req, res, next);
 });
 
-router.post('/', upload.single('file'), (req, res) => {
+router.post('/', (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: '没有上传文件' });
   }
