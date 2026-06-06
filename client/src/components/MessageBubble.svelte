@@ -52,6 +52,11 @@
       {msg.user_nickname?.charAt(0) || '?'}
     </div>
   {/if}
+  {#if !isMine}
+    <div class="msg-avatar" style="background: {msg.user_avatar_color || '#6366f1'}">
+      {msg.user_nickname?.charAt(0) || '?'}
+    </div>
+  {/if}
 
   <div class="msg-body">
     {#if !isMine}
@@ -102,12 +107,6 @@
       </div>
     </div>
   </div>
-
-  {#if !isMine}
-    <div class="msg-avatar" style="background: {msg.user_avatar_color || '#6366f1'}">
-      {msg.user_nickname?.charAt(0) || '?'}
-    </div>
-  {/if}
 </div>
 
 <style>
