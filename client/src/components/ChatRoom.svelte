@@ -1,5 +1,4 @@
 <script>
-  import { afterUpdate, tick } from 'svelte';
   import MessageBubble from './MessageBubble.svelte';
   import MessageInput from './MessageInput.svelte';
 
@@ -14,53 +13,27 @@
   export let onLoadMore;
 
   let messageContainer;
-  let autoScroll = true;
   let dragOver = false;
-  let bottomAnchor;
   let loadingMore = false;
   let hasMore = true;
-  let prevScrollHeight = 0;
+  let prefetchHeight = 0;
 
-  $: if (roomId) { autoScroll = true; hasMore = true; loadingMore = false; }
+  $: if (roomId) { hasMore = true; loadingMore = false; }
 
   function handleScroll() {
     if (!messageContainer) return;
     const { scrollTop, scrollHeight, clientHeight } = messageContainer;
-    autoScroll = scrollHeight - scrollTop - clientHeight < 120;
+    const distFromVisualTop = scrollHeight - scrollTop - clientHeight;
 
-    if (scrollTop < 80 && hasMore && !loadingMore) {
+    if (distFromVisualTop < 120 && hasMore && !loadingMore) {
       loadingMore = true;
-      prevScrollHeight = messageContainer.scrollHeight;
+      prefetchHeight = messageContainer.scrollHeight - messageContainer.scrollTop;
       onLoadMore?.().then(more => {
         hasMore = more !== false;
         loadingMore = false;
       });
     }
   }
-
-  function scrollToBottom() {
-    if (!autoScroll || !messageContainer) return;
-    bottomAnchor?.scrollIntoView({ block: 'end' });
-  }
-
-  afterUpdate(() => {
-    if (loadingMore && messageContainer && prevScrollHeight > 0) {
-      const newScrollHeight = messageContainer.scrollHeight;
-      messageContainer.scrollTop = newScrollHeight - prevScrollHeight;
-      prevScrollHeight = 0;
-    }
-
-    if (autoScroll) {
-      tick().then(() => {
-        scrollToBottom();
-        requestAnimationFrame(() => {
-          scrollToBottom();
-          setTimeout(() => scrollToBottom(), 200);
-          setTimeout(() => scrollToBottom(), 600);
-        });
-      });
-    }
-  });
 
   function formatDate(iso) {
     if (!iso) return '';
@@ -143,6 +116,12 @@
       return { ...msg, showDate, dateLabel: date };
     });
   })();
+
+  $: if (typeof document !== 'undefined' && loadingMore && messageContainer && prefetchHeight > 0) {
+    const target = messageContainer.scrollHeight - prefetchHeight;
+    messageContainer.scrollTop = target;
+    prefetchHeight = 0;
+  }
 </script>
 
 <div class="chat-room">
@@ -155,12 +134,6 @@
     on:dragleave={handleDragLeave}
     on:drop={handleDrop}
   >
-    {#if loadingMore}
-      <div class="load-more-spinner">
-        <div class="spinner"></div>
-      </div>
-    {/if}
-
     {#if messages.length === 0}
       <div class="empty-chat">
         <div class="empty-icon">💬</div>
@@ -169,12 +142,6 @@
     {/if}
 
     {#each messagesWithDates as msg}
-      {#if msg.showDate}
-        <div class="date-separator">
-          <span>{msg.dateLabel}</span>
-        </div>
-      {/if}
-
       <MessageBubble
         {msg}
         isMine={msg.user_id === currentUser?.id}
@@ -183,8 +150,18 @@
         {onMediaPreview}
         {isMobile}
       />
+      {#if msg.showDate}
+        <div class="date-separator">
+          <span>{msg.dateLabel}</span>
+        </div>
+      {/if}
     {/each}
-    <div bind:this={bottomAnchor}></div>
+
+    {#if loadingMore}
+      <div class="load-more-spinner">
+        <div class="spinner"></div>
+      </div>
+    {/if}
   </div>
 
   <MessageInput {onSend} {roomId} {isMobile} />
@@ -201,6 +178,8 @@
 
   .messages-container {
     flex: 1;
+    display: flex;
+    flex-direction: column-reverse;
     overflow-y: auto;
     padding: 8px 0;
     -webkit-overflow-scrolling: touch;
@@ -217,6 +196,7 @@
     display: flex;
     justify-content: center;
     padding: 16px 0;
+    order: 999;
   }
 
   .spinner {
@@ -254,7 +234,7 @@
   .date-separator {
     display: flex;
     justify-content: center;
-    margin: 16px 0 8px;
+    margin: 8px 0 16px;
   }
 
   .date-separator span {
