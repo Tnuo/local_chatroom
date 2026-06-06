@@ -109,7 +109,7 @@
 
   $: messagesWithDates = (() => {
     let lastDate = '';
-    return messages.map(msg => {
+    return [...messages].reverse().map(msg => {
       const date = formatDate(msg.created_at);
       const showDate = date && date !== lastDate;
       if (showDate) lastDate = date;
