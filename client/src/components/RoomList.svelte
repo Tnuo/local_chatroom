@@ -105,8 +105,6 @@
   }
 </script>
 
-<svelte:window on:contextmenu={(e) => { if (!e.target.closest('.room-item')) { e.preventDefault(); } }} />
-
 <div class="sidebar-inner">
   <div class="sidebar-header">
     <div class="user-info">
