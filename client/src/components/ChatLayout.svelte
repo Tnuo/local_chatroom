@@ -3,7 +3,7 @@
   import { io } from 'socket.io-client';
   import { currentUser } from '../stores/user.js';
   import { rooms, currentRoomId, onlineUsers, incrementUnread, clearUnread, removeRoom, renameRoom } from '../stores/rooms.js';
-  import { messages, addMessage, updateMessage, setMessages, removeMessage } from '../stores/messages.js';
+  import { messages, addMessage, updateMessage, setMessages, removeMessage, prependMessages } from '../stores/messages.js';
   import RoomList from './RoomList.svelte';
   import ChatRoom from './ChatRoom.svelte';
   import SearchBar from './SearchBar.svelte';
@@ -16,6 +16,7 @@
   let lightboxSrc = '';
   let lightboxType = '';
   let showSettings = false;
+  let pageSize = 50;
 
   function checkMobile() {
     isMobile = window.innerWidth <= 768;
@@ -87,13 +88,38 @@
 
   async function loadMessages(roomId) {
     try {
-      const res = await fetch(`/api/messages/${roomId}?limit=100`);
+      const res = await fetch(`/api/messages/${roomId}?limit=${pageSize}`);
       const msgs = await res.json();
       setMessages(roomId, msgs);
     } catch (e) {
       console.error('Failed to load messages:', e);
     }
   }
+
+  async function loadMoreMessages(roomId) {
+    try {
+      const roomMsgs = $messages[roomId] || [];
+      if (roomMsgs.length === 0) return false;
+      const oldest = roomMsgs[0].created_at;
+      const res = await fetch(`/api/messages/${roomId}?limit=${pageSize}&before=${encodeURIComponent(oldest)}`);
+      const msgs = await res.json();
+      if (msgs.length === 0) return false;
+      prependMessages(roomId, msgs);
+      return msgs.length >= pageSize;
+    } catch (e) {
+      console.error('Failed to load more messages:', e);
+      return false;
+    }
+  }
+
+  async function loadConfig() {
+    try {
+      const res = await fetch('/api/config');
+      const cfg = await res.json();
+      pageSize = cfg.message?.page_size || 50;
+    } catch (e) { /* keep default */ }
+  }
+  loadConfig();
 
   function refreshRooms() {
     fetch('/api/rooms').then(r => r.json()).then(data => rooms.set(data));
@@ -199,6 +225,7 @@
         onTogglePermanent={handleTogglePermanent}
         onDeleteMessage={handleDeleteMessage}
         onMediaPreview={handleMediaPreview}
+        onLoadMore={() => loadMoreMessages($currentRoomId)}
         {isMobile}
       />
     {/if}

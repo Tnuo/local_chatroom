@@ -16,7 +16,7 @@ function loadConfig() {
 function getDefaults() {
   return {
     server: { port: 3000, upload_limit: 52428800 },
-    message: { retention_days: 30, cleanup_time: '03:00' },
+    message: { retention_days: 30, cleanup_time: '03:00', page_size: 50 },
     rooms: { default: '大厅', max_rooms: 20 },
     files: {
       allowed_extensions: [

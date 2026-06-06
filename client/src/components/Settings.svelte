@@ -43,7 +43,10 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           files: { allowed_extensions: config.files.allowed_extensions },
-          message: { retention_days: Number(config.message.retention_days) }
+          message: {
+            retention_days: Number(config.message.retention_days),
+            page_size: Number(config.message.page_size)
+          }
         })
       });
       if (!res.ok) throw new Error('保存失败');
@@ -76,6 +79,15 @@
           <div class="field-row">
             <input type="number" bind:value={config.message.retention_days} min="1" max="365" class="num-input" />
             <span>天</span>
+          </div>
+        </section>
+
+        <section class="setting-section">
+          <h3>每次加载消息数</h3>
+          <p class="desc">打开房间时加载的最新消息条数，上滑加载更多</p>
+          <div class="field-row">
+            <input type="number" bind:value={config.message.page_size} min="10" max="200" class="num-input" />
+            <span>条</span>
           </div>
         </section>
 

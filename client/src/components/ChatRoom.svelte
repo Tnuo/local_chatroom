@@ -11,18 +11,31 @@
   export let onDeleteMessage;
   export let onMediaPreview;
   export let isMobile = false;
+  export let onLoadMore;
 
   let messageContainer;
   let autoScroll = true;
   let dragOver = false;
   let bottomAnchor;
+  let loadingMore = false;
+  let hasMore = true;
+  let prevScrollHeight = 0;
 
-  $: if (roomId) { autoScroll = true; }
+  $: if (roomId) { autoScroll = true; hasMore = true; loadingMore = false; }
 
   function handleScroll() {
     if (!messageContainer) return;
     const { scrollTop, scrollHeight, clientHeight } = messageContainer;
     autoScroll = scrollHeight - scrollTop - clientHeight < 120;
+
+    if (scrollTop < 80 && hasMore && !loadingMore) {
+      loadingMore = true;
+      prevScrollHeight = messageContainer.scrollHeight;
+      onLoadMore?.().then(more => {
+        hasMore = more !== false;
+        loadingMore = false;
+      });
+    }
   }
 
   function scrollToBottom() {
@@ -31,6 +44,12 @@
   }
 
   afterUpdate(() => {
+    if (loadingMore && messageContainer && prevScrollHeight > 0) {
+      const newScrollHeight = messageContainer.scrollHeight;
+      messageContainer.scrollTop = newScrollHeight - prevScrollHeight;
+      prevScrollHeight = 0;
+    }
+
     if (autoScroll) {
       tick().then(() => {
         scrollToBottom();
@@ -136,6 +155,12 @@
     on:dragleave={handleDragLeave}
     on:drop={handleDrop}
   >
+    {#if loadingMore}
+      <div class="load-more-spinner">
+        <div class="spinner"></div>
+      </div>
+    {/if}
+
     {#if messages.length === 0}
       <div class="empty-chat">
         <div class="empty-icon">💬</div>
@@ -186,6 +211,25 @@
     background: rgba(99, 102, 241, 0.06);
     outline: 2px dashed #6366f1;
     outline-offset: -2px;
+  }
+
+  .load-more-spinner {
+    display: flex;
+    justify-content: center;
+    padding: 16px 0;
+  }
+
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid #e5e7eb;
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   .empty-chat {

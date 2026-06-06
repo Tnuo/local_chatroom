@@ -34,3 +34,22 @@ export function removeMessage(roomId, msgId) {
     return { ...msgs, [roomId]: roomMessages };
   });
 }
+
+export function prependMessages(roomId, msgs) {
+  messages.update(all => {
+    const existing = all[roomId] || [];
+    const existingIds = new Set(existing.map(m => m.id));
+    const newMsgs = msgs.filter(m => !existingIds.has(m.id));
+    return { ...all, [roomId]: [...newMsgs, ...existing] };
+  });
+}
+
+export function getOldestTimestamp(roomId) {
+  let ts = null;
+  messages.update(all => {
+    const msgs = all[roomId] || [];
+    if (msgs.length > 0) ts = msgs[0].created_at;
+    return all;
+  });
+  return ts;
+}

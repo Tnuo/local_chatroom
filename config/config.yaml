@@ -4,6 +4,7 @@ server:
 message:
   retention_days: 30
   cleanup_time: '03:00'
+  page_size: 50
 rooms:
   default: 大厅
   max_rooms: 20
