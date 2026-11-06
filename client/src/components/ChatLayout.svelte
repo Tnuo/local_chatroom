@@ -423,11 +423,9 @@
 
   .sidebar.mobile {
     position: fixed;
-    top: 0;
+    top: env(safe-area-inset-top);
     left: 0;
-    bottom: 0;
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
+    bottom: env(safe-area-inset-bottom);
     transform: translateX(-100%);
     box-shadow: none;
     z-index: 200;
@@ -440,7 +438,10 @@
 
   .backdrop {
     position: fixed;
-    inset: 0;
+    top: env(safe-area-inset-top);
+    right: env(safe-area-inset-right);
+    bottom: env(safe-area-inset-bottom);
+    left: env(safe-area-inset-left);
     background: rgba(0,0,0,0.4);
     z-index: 199;
     border: none;

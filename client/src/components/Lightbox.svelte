@@ -28,6 +28,13 @@
   let cacheError = '';
   let checkedCacheUrl = '';
   let cacheCheckId = 0;
+  let dragY = 0;
+  let closing = false;
+  let closeX = 0;
+  let closeY = 0;
+  let closeScale = 1;
+  let overlayOpacity = 0.94;
+  let closeTimer;
 
   $: currentItem = gallery[Math.min(activeIndex, gallery.length - 1)] || { src, type, name: '' };
   $: isImage = currentItem.type === 'image';
@@ -55,7 +62,7 @@
   }
 
   function handleKeydown(event) {
-    if (event.key === 'Escape') onClose?.();
+    if (event.key === 'Escape') animateClose();
     if (event.key === 'ArrowRight') showItem(activeIndex + 1);
     if (event.key === 'ArrowLeft') showItem(activeIndex - 1);
     if (event.key === '+' || event.key === '=') setZoom(Math.min(4, scale + 0.5));
@@ -63,7 +70,27 @@
   }
 
   function handleOverlayClick(event) {
-    if (event.target === event.currentTarget) onClose?.();
+    if (event.target === event.currentTarget) animateClose();
+  }
+
+  function animateClose() {
+    if (closing) return;
+    closing = true;
+    const row = currentItem.id ? document.getElementById(`msg-${currentItem.id}`) : null;
+    const origin = row?.querySelector('.media-trigger, .video-expand')?.getBoundingClientRect();
+    const media = document.querySelector('.preview-image, .preview-video');
+    if (origin && media) {
+      const rect = media.getBoundingClientRect();
+      closeX = origin.left + origin.width / 2 - (rect.left + rect.width / 2);
+      closeY = origin.top + origin.height / 2 - (rect.top + rect.height / 2) + dragY;
+      closeScale = Math.min(origin.width / rect.width, origin.height / rect.height);
+    } else {
+      closeY = Math.max(window.innerHeight * 0.35, 160);
+      closeScale = 0.72;
+    }
+    dragY = 0;
+    overlayOpacity = 0;
+    closeTimer = window.setTimeout(() => onClose?.(), 280);
   }
 
   async function showItem(index) {
@@ -161,6 +188,21 @@
       const boundY = window.innerHeight * (scale - 1) / 2;
       offsetX = Math.max(-boundX, Math.min(boundX, gesture.offsetX + touch.clientX - gesture.x));
       offsetY = Math.max(-boundY, Math.min(boundY, gesture.offsetY + touch.clientY - gesture.y));
+      return;
+    }
+    if (gesture.mode === 'swipe' && event.touches.length === 1) {
+      const touch = event.touches[0];
+      const dx = touch.clientX - gesture.x;
+      const dy = touch.clientY - gesture.y;
+      if (dy > 0 && dy > Math.abs(dx) * 1.1) {
+        event.preventDefault();
+        dragY = dy;
+        overlayOpacity = Math.max(0.18, 0.94 * (1 - dy / (window.innerHeight * 0.9)));
+      } else if (dragY) {
+        event.preventDefault();
+        dragY = Math.max(0, dy);
+        overlayOpacity = Math.max(0.18, 0.94 * (1 - dragY / (window.innerHeight * 0.9)));
+      }
     }
   }
 
@@ -171,7 +213,9 @@
       const dx = touch.clientX - gesture.x;
       const dy = touch.clientY - gesture.y;
       const now = Date.now();
-      if (Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      if (dy > 120 && dy > Math.abs(dx) * 1.2) {
+        animateClose();
+      } else if (Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.2) {
         showItem(activeIndex + (dx < 0 ? 1 : -1));
       } else if (now - lastTapAt < 320 && Math.abs(dx) < 12 && Math.abs(dy) < 12) {
         toggleZoom();
@@ -179,6 +223,10 @@
       } else {
         lastTapAt = now;
       }
+    }
+    if (!closing) {
+      dragY = 0;
+      overlayOpacity = 0.94;
     }
     gesture = null;
   }
@@ -255,11 +303,12 @@
   onDestroy(() => {
     document.body.style.overflow = '';
     window.removeEventListener('keydown', handleKeydown);
+    window.clearTimeout(closeTimer);
   });
 </script>
 
-<div class="lightbox-overlay" on:click={handleOverlayClick}>
-  <button class="close-btn" on:click={() => onClose?.()} aria-label="关闭">
+<div class="lightbox-overlay" class:closing style="--overlay-opacity: {overlayOpacity}" on:click={handleOverlayClick}>
+  <button class="close-btn" on:click={animateClose} aria-label="关闭">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
       <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
     </svg>
@@ -297,10 +346,11 @@
     class="lightbox-content"
     class:zoomed={scale > 1}
     class:touch-gestures={isImage}
+    class:closing
     on:touchstart={handleTouchStart}
     on:touchmove|nonpassive={handleTouchMove}
     on:touchend={handleTouchEnd}
-    on:touchcancel={() => gesture = null}
+    on:touchcancel={() => { gesture = null; dragY = 0; overlayOpacity = 0.94; }}
     on:wheel|nonpassive={handleWheel}
   >
     {#key currentItem.src}
@@ -309,12 +359,13 @@
           src={currentItem.src}
           alt={currentItem.name || ''}
           class="preview-image"
-          style="transform: translate({offsetX}px, {offsetY}px) scale({scale})"
+          style="transform: translate({offsetX + closeX}px, {offsetY + dragY + closeY}px) scale({scale * closeScale})"
+          class:closing
           on:dblclick={toggleZoom}
           draggable="false"
         />
       {:else if currentItem.type === 'video'}
-        <video src={currentItem.src} controls autoplay playsinline class="preview-video"></video>
+        <video src={currentItem.src} controls autoplay playsinline class="preview-video" class:closing style="transform: translate({closeX}px, {dragY + closeY}px) scale({closeScale})"></video>
       {:else if currentItem.type === 'audio'}
         <div class="audio-wrapper">
           <div class="audio-icon">🎵</div>
@@ -335,13 +386,14 @@
     position: fixed;
     inset: 0;
     z-index: 500;
-    background: rgba(0,0,0,0.94);
+    background: rgba(0,0,0,var(--overlay-opacity, 0.94));
     display: flex;
     align-items: center;
     justify-content: center;
     padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
     animation: fadeIn 0.2s ease;
   }
+  .lightbox-overlay.closing { transition: background 0.28s ease; }
 
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
@@ -371,9 +423,10 @@
     box-shadow: 0 4px 30px rgba(0,0,0,0.5);
     -webkit-touch-callout: default;
     user-select: none;
-    transition: transform 0.12s ease-out;
+    transition: none;
     will-change: transform;
   }
+  .preview-image.closing, .preview-video.closing { transition: transform 0.28s cubic-bezier(.2,.75,.25,1); }
 
   .preview-video { max-width: 100%; max-height: 100%; border-radius: 4px; background: #000; }
 

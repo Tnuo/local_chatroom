@@ -14,7 +14,7 @@ export default defineConfig({
         short_name: '聊天室',
         description: '可离线查看已缓存聊天记录的局域网聊天室',
         lang: 'zh-CN',
-        theme_color: '#6366f1',
+        theme_color: '#f0f2f5',
         background_color: '#f0f2f5',
         display: 'standalone',
         start_url: '/',

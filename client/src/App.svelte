@@ -17,6 +17,8 @@
     height: 100%;
     width: 100%;
     overflow: hidden;
+    background: #f0f2f5;
+    color-scheme: light;
   }
 
   :global(*) {
@@ -39,6 +41,7 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
+    background: #f0f2f5;
   }
 
   :global(::-webkit-scrollbar) {
