@@ -338,10 +338,13 @@
 
   .context-overlay {
     position: fixed; inset: 0; z-index: 300;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
 
   .context-menu {
     position: fixed; z-index: 301;
+    max-height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto;
     background: #313244; border: 1px solid #45475a;
     border-radius: 10px; padding: 6px; min-width: 150px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.4);

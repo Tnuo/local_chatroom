@@ -13,6 +13,12 @@
 {/if}
 
 <style>
+  :global(html) {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+
   :global(*) {
     margin: 0;
     padding: 0;
@@ -23,14 +29,14 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     background: #f0f2f5;
     color: #1a1a2e;
-    height: 100vh;
-    height: 100dvh;
+    height: 100%;
+    min-height: 0;
     overflow: hidden;
   }
 
   :global(#app) {
-    height: 100vh;
-    height: 100dvh;
+    height: 100%;
+    min-height: 0;
     display: flex;
     flex-direction: column;
   }

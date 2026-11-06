@@ -65,6 +65,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
     animation: fadeIn 0.2s ease;
   }
 
@@ -75,8 +76,8 @@
 
   .close-btn {
     position: absolute;
-    top: 16px;
-    right: 16px;
+    top: max(16px, env(safe-area-inset-top));
+    right: max(16px, env(safe-area-inset-right));
     z-index: 501;
     background: rgba(255,255,255,0.15);
     border: none;
@@ -96,8 +97,8 @@
 
   .download-btn {
     position: absolute;
-    top: 16px;
-    right: 72px;
+    top: max(16px, env(safe-area-inset-top));
+    right: calc(max(16px, env(safe-area-inset-right)) + 56px);
     z-index: 501;
     background: rgba(255,255,255,0.15);
     border: none;
@@ -118,8 +119,7 @@
 
   .lightbox-content {
     max-width: 95vw;
-    max-height: 95vh;
-    max-height: 95dvh;
+    max-height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -127,8 +127,7 @@
 
   .preview-image {
     max-width: 95vw;
-    max-height: 95vh;
-    max-height: 95dvh;
+    max-height: 100%;
     object-fit: contain;
     border-radius: 4px;
     box-shadow: 0 4px 30px rgba(0,0,0,0.5);
@@ -137,8 +136,7 @@
 
   .preview-video {
     max-width: 95vw;
-    max-height: 95vh;
-    max-height: 95dvh;
+    max-height: 100%;
     border-radius: 4px;
     box-shadow: 0 4px 30px rgba(0,0,0,0.5);
   }

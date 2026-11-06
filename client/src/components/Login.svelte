@@ -94,8 +94,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 100vh;
-    min-height: 100dvh;
+    min-height: 100%;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    box-sizing: border-box;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   }
 
@@ -218,9 +219,7 @@
     }
 
     .login-container {
-      align-items: flex-start;
-      padding-top: 10vh;
-      padding-top: 10dvh;
+      align-items: center;
     }
 
     .color-dot {

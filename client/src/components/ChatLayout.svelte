@@ -304,8 +304,9 @@
 <style>
   .layout {
     display: flex;
-    height: 100vh;
-    height: 100dvh;
+    height: 100%;
+    min-height: 0;
+    flex: 1;
     background: #f0f2f5;
     position: relative;
     overflow: hidden;
@@ -326,6 +327,8 @@
     top: 0;
     left: 0;
     bottom: 0;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
     transform: translateX(-100%);
     box-shadow: none;
     z-index: 200;
@@ -372,7 +375,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 6px 16px;
+    padding: calc(6px + env(safe-area-inset-top)) 16px 6px;
     background: white;
     border-bottom: 1px solid #e5e7eb;
     min-height: 42px;
@@ -423,6 +426,11 @@
     .sidebar {
       width: 280px;
       min-width: 280px;
+    }
+
+    .top-bar {
+      padding-left: max(12px, env(safe-area-inset-left));
+      padding-right: max(12px, env(safe-area-inset-right));
     }
   }
 </style>

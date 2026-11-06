@@ -137,6 +137,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
     animation: fadeIn 0.2s ease;
   }
 
@@ -147,8 +148,7 @@
     border-radius: 16px;
     width: 440px;
     max-width: 92vw;
-    max-height: 85vh;
-    max-height: 85dvh;
+    max-height: 100%;
     display: flex;
     flex-direction: column;
     box-shadow: 0 20px 60px rgba(0,0,0,0.2);

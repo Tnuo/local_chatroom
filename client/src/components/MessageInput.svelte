@@ -307,7 +307,7 @@
 
   @media (max-width: 768px) {
     .input-area {
-      padding: 8px 10px;
+      padding: 8px max(10px, env(safe-area-inset-right)) 8px max(10px, env(safe-area-inset-left));
       padding-bottom: max(8px, env(safe-area-inset-bottom));
     }
 
