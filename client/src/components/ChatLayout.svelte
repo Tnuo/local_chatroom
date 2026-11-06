@@ -19,6 +19,11 @@
   let lightboxType = '';
   let lightboxItems = [];
   let lightboxIndex = 0;
+  let lightboxHasOlder = false;
+  let lightboxHasNewer = false;
+  let lightboxLoading = false;
+  let lightboxError = '';
+  let lightboxRequestId = 0;
   let showSettings = false;
   let pageSize = 50;
   let online = typeof navigator === 'undefined' ? true : navigator.onLine;
@@ -235,14 +240,15 @@
     });
   }
 
-  function handleMediaPreview({ messageId, src, type }) {
+  async function handleMediaPreview({ messageId, src, type }) {
+    const requestId = ++lightboxRequestId;
     const roomMessages = $messages[$currentRoomId] || [];
     lightboxItems = roomMessages
-      .filter(message => message.file_url && ['image', 'video'].includes(getMediaKind(message.mime_type)))
+      .filter(message => message.file_url && (message.type === 'image' || ['image', 'video'].includes(getMediaKind(message.mime_type))))
       .map(message => ({
         id: message.id,
         src: '/uploads/' + message.file_url,
-        type: getMediaKind(message.mime_type),
+        type: message.type === 'image' ? 'image' : getMediaKind(message.mime_type),
         name: message.file_name || ''
       }));
     lightboxIndex = lightboxItems.findIndex(item => item.id === messageId);
@@ -252,11 +258,54 @@
     }
     lightboxSrc = src;
     lightboxType = type;
+    lightboxHasOlder = false;
+    lightboxHasNewer = false;
+    lightboxError = '';
+    lightboxLoading = online;
+
+    if (!online) return;
+
+    try {
+      const response = await fetch(`/api/messages/${$currentRoomId}/media?around=${encodeURIComponent(messageId)}&limit=40`);
+      if (!response.ok) throw new Error('无法加载房间媒体列表');
+      const result = await response.json();
+      if (requestId !== lightboxRequestId) return;
+      lightboxItems = result.items || [];
+      lightboxIndex = Math.max(0, lightboxItems.findIndex(item => item.id === messageId));
+      lightboxHasOlder = Boolean(result.hasOlder);
+      lightboxHasNewer = Boolean(result.hasNewer);
+    } catch (error) {
+      if (requestId === lightboxRequestId) lightboxError = error.message || '媒体列表加载失败';
+    } finally {
+      if (requestId === lightboxRequestId) lightboxLoading = false;
+    }
+  }
+
+  async function loadMediaPage(direction, cursor) {
+    if (!online) return { items: [], hasMore: false };
+    const params = new URLSearchParams({ limit: '40' });
+    if (direction === 'older') {
+      params.set('beforeCreatedAt', cursor.created_at);
+      params.set('beforeId', cursor.id);
+    } else {
+      params.set('afterCreatedAt', cursor.created_at);
+      params.set('afterId', cursor.id);
+    }
+
+    const response = await fetch(`/api/messages/${$currentRoomId}/media?${params}`);
+    if (!response.ok) throw new Error('更多媒体加载失败');
+    const result = await response.json();
+    return {
+      items: result.items || [],
+      hasMore: Boolean(result.hasMore)
+    };
   }
 
   function closeLightbox() {
+    lightboxRequestId++;
     lightboxSrc = '';
     lightboxType = '';
+    lightboxLoading = false;
   }
 
   function toggleSidebar() { sidebarOpen = !sidebarOpen; }
@@ -327,7 +376,24 @@
 </div>
 
 {#if lightboxSrc}
-  <Lightbox src={lightboxSrc} type={lightboxType} items={lightboxItems} initialIndex={lightboxIndex} onClose={closeLightbox} />
+  {#if lightboxLoading}
+    <div class="media-loading-overlay" role="status">
+      <span>正在加载房间媒体…</span>
+      <button class="media-loading-close" on:click={closeLightbox} aria-label="关闭媒体预览">×</button>
+    </div>
+  {:else}
+    <Lightbox
+      src={lightboxSrc}
+      type={lightboxType}
+      initialItems={lightboxItems}
+      initialIndex={lightboxIndex}
+      hasOlder={lightboxHasOlder}
+      hasNewer={lightboxHasNewer}
+      loadError={lightboxError}
+      onLoadMore={loadMediaPage}
+      onClose={closeLightbox}
+    />
+  {/if}
 {/if}
 
 {#if showSettings}
@@ -402,6 +468,31 @@
     border-bottom: 1px solid #fde68a;
     font-size: 13px;
     text-align: center;
+  }
+
+  .media-loading-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    color: white;
+    background: rgba(0, 0, 0, 0.94);
+  }
+
+  .media-loading-close {
+    position: absolute;
+    top: max(16px, env(safe-area-inset-top));
+    right: max(16px, env(safe-area-inset-right));
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 50%;
+    color: white;
+    background: rgba(255, 255, 255, 0.16);
+    font-size: 28px;
   }
 
   .send-error {

@@ -47,6 +47,7 @@ function initDb() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_room_time_id ON messages(room_id, julianday(created_at), id);
     CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
     CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id);
     CREATE INDEX IF NOT EXISTS idx_messages_content_search ON messages(content);

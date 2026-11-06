@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { VitePWA } from 'vite-plugin-pwa';
+import { RangeRequestsPlugin } from 'workbox-range-request';
 
 export default defineConfig({
   plugins: [
@@ -31,7 +32,11 @@ export default defineConfig({
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/uploads/'),
             handler: 'CacheFirst',
-            options: { cacheName: 'chat-uploads', expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 30 } }
+            options: {
+              cacheName: 'chat-uploads',
+              expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              plugins: [new RangeRequestsPlugin()]
+            }
           }
         ]
       },
