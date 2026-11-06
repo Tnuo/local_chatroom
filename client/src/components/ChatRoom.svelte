@@ -1,6 +1,8 @@
 <script>
   import MessageBubble from './MessageBubble.svelte';
   import MessageInput from './MessageInput.svelte';
+  import { getAttachmentMessageType } from '../utils/messageTypes.js';
+  import { uploadAttachment } from '../utils/uploadAttachment.js';
 
   export let roomId;
   export let messages = [];
@@ -46,32 +48,9 @@
     return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
   }
 
-  function determineType(mime) {
-    if (!mime) return 'file';
-    if (mime.startsWith('image/')) return 'image';
-    if (mime.startsWith('video/')) return 'video';
-    if (mime.startsWith('audio/')) return 'audio';
-    return 'file';
-  }
-
   async function uploadFile(file) {
-    const resp = await fetch('/api/config');
-    const config = await resp.json();
-    const limit = config.server?.upload_limit || 52428800;
-
-    if (file.size > limit) {
-      alert(`文件 "${file.name}" 超过大小限制`);
-      return null;
-    }
-
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      return data;
+      return await uploadAttachment(file);
     } catch (e) {
       alert('上传失败: ' + e.message);
       return null;
@@ -87,7 +66,7 @@
         const uploaded = await uploadFile(file);
         if (uploaded) {
           onSend?.({
-            type: determineType(file.type),
+            type: getAttachmentMessageType(uploaded.mimetype),
             content: '',
             file: uploaded
           });

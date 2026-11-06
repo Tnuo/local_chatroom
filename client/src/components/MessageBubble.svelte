@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { getMediaKind } from '../utils/messageTypes.js';
 
   export let msg;
   export let isMine = false;
@@ -36,14 +37,14 @@
 
   function openPreview() {
     if (msg.file_url) {
-      onMediaPreview?.({ src: '/uploads/' + msg.file_url, type: msg.type });
+      onMediaPreview?.({ messageId: msg.id, src: '/uploads/' + msg.file_url, type: getMediaKind(msg.mime_type) });
     }
   }
 
-  function isImage(mime) { return mime && mime.startsWith('image/'); }
-  function isVideo(mime) { return mime && mime.startsWith('video/'); }
-  function isAudio(mime) { return mime && mime.startsWith('audio/'); }
-  function isPDF(mime) { return mime && mime === 'application/pdf'; }
+  function isImage(mime) { return getMediaKind(mime) === 'image'; }
+  function isVideo(mime) { return getMediaKind(mime) === 'video'; }
+  function isAudio(mime) { return getMediaKind(mime) === 'audio'; }
+  function isPDF(mime) { return String(mime || '').toLowerCase() === 'application/pdf'; }
 </script>
 
 <div class="msg-row" class:mine={isMine} id="msg-{msg.id}">
@@ -71,9 +72,12 @@
         {#if msg.content}
           <div class="msg-text">{msg.content}</div>
         {/if}
-      {:else if msg.type === 'video' && isVideo(msg.mime_type)}
-        <video class="msg-video" src="/uploads/{msg.file_url}" controls preload="metadata" playsinline></video>
-      {:else if msg.type === 'audio' && isAudio(msg.mime_type)}
+      {:else if (msg.type === 'file' || msg.type === 'video') && isVideo(msg.mime_type)}
+        <div class="video-attachment">
+          <video class="msg-video" src="/uploads/{msg.file_url}" controls preload="metadata" playsinline></video>
+          <button class="video-expand" on:click={openPreview} aria-label="放大视频" title="放大视频">⛶</button>
+        </div>
+      {:else if (msg.type === 'file' || msg.type === 'audio') && isAudio(msg.mime_type)}
         <audio src="/uploads/{msg.file_url}" controls preload="metadata"></audio>
       {:else if msg.type === 'file'}
         <div class="file-card">
@@ -213,6 +217,25 @@
     max-height: 280px;
     border-radius: 8px;
     background: #000;
+  }
+
+  .video-attachment {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .video-expand {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    color: white;
+    background: rgba(0, 0, 0, 0.62);
+    font-size: 22px;
+    cursor: pointer;
   }
 
   .file-card {

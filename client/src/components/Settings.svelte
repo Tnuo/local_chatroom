@@ -24,14 +24,15 @@
     if (!newExt.trim()) return;
     let ext = newExt.trim().toLowerCase();
     if (!ext.startsWith('.')) ext = '.' + ext;
-    if (!config.files.allowed_extensions.includes(ext)) {
-      config.files.allowed_extensions = [...config.files.allowed_extensions, ext];
-    }
+    const extensions = config.files.allowed_extensions.map(value => String(value).trim().toLowerCase());
+    config.files.allowed_extensions = extensions.includes(ext) ? extensions : [...extensions, ext];
     newExt = '';
   }
 
   function removeExtension(ext) {
-    config.files.allowed_extensions = config.files.allowed_extensions.filter(e => e !== ext);
+    const normalized = String(ext).trim().toLowerCase();
+    config.files.allowed_extensions = config.files.allowed_extensions
+      .filter(value => String(value).trim().toLowerCase() !== normalized);
   }
 
   async function save() {
@@ -49,11 +50,16 @@
           }
         })
       });
-      if (!res.ok) throw new Error('保存失败');
+      if (!res.ok) {
+        const result = await res.json().catch(() => ({}));
+        throw new Error(result.error || '保存失败');
+      }
+      const result = await res.json();
+      config = result.config;
       saveMsg = '✓ 已保存';
       setTimeout(() => saveMsg = '', 2000);
     } catch (e) {
-      saveMsg = '保存失败';
+      saveMsg = e.message || '保存失败';
     } finally {
       loading = false;
     }
@@ -93,7 +99,7 @@
 
         <section class="setting-section">
           <h3>允许的文件类型</h3>
-          <p class="desc">添加或移除可上传的文件扩展名</p>
+          <p class="desc">添加或移除可上传的文件扩展名；留空时禁止所有文件上传</p>
           <div class="ext-list">
             {#each config.files.allowed_extensions as ext}
               <span class="ext-tag">

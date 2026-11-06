@@ -1,6 +1,7 @@
 const fs = require('fs');
 const yaml = require('js-yaml');
 const { CONFIG_PATH } = require('./paths');
+const { normalizeExtensions } = require('./fileTypes');
 
 let _config = null;
 
@@ -42,11 +43,18 @@ function reloadConfig() {
 
 function saveConfig(updates) {
   const config = getConfig();
+  const requestedExtensions = updates.files?.allowed_extensions;
   const merged = {
     server: { ...config.server, ...(updates.server || {}) },
     message: { ...config.message, ...(updates.message || {}) },
     rooms: { ...config.rooms, ...(updates.rooms || {}) },
-    files: { ...config.files, ...(updates.files || {}) }
+    files: {
+      ...config.files,
+      ...(updates.files || {}),
+      allowed_extensions: normalizeExtensions(
+        requestedExtensions === undefined ? config.files?.allowed_extensions : requestedExtensions
+      )
+    }
   };
   fs.writeFileSync(CONFIG_PATH, yaml.dump(merged, { lineWidth: -1 }), 'utf8');
   _config = merged;

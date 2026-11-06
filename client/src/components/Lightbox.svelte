@@ -3,17 +3,126 @@
 
   export let src = '';
   export let type = 'image';
+  export let items = [];
+  export let initialIndex = 0;
   export let onClose;
 
-  function handleKeydown(e) {
-    if (e.key === 'Escape') onClose?.();
+  let activeIndex = 0;
+  let scale = 1;
+  let offsetX = 0;
+  let offsetY = 0;
+  let gesture = null;
+  let lastTapAt = 0;
+
+  $: gallery = items.length ? items : [{ src, type, name: '' }];
+  $: currentItem = gallery[Math.min(activeIndex, gallery.length - 1)] || { src, type, name: '' };
+  $: isImage = currentItem.type === 'image';
+
+  function resetZoom() {
+    scale = 1;
+    offsetX = 0;
+    offsetY = 0;
+    gesture = null;
   }
 
-  function handleOverlayClick(e) {
-    if (e.target === e.currentTarget) onClose?.();
+  function handleKeydown(event) {
+    if (event.key === 'Escape') onClose?.();
+    if (event.key === 'ArrowRight') showItem(activeIndex + 1);
+    if (event.key === 'ArrowLeft') showItem(activeIndex - 1);
+    if (event.key === '+' || event.key === '=') setZoom(Math.min(4, scale + 0.5));
+    if (event.key === '-') setZoom(Math.max(1, scale - 0.5));
+  }
+
+  function handleOverlayClick(event) {
+    if (event.target === event.currentTarget) onClose?.();
+  }
+
+  function showItem(index) {
+    if (gallery.length < 2) return;
+    activeIndex = (index + gallery.length) % gallery.length;
+    resetZoom();
+  }
+
+  function setZoom(nextScale) {
+    scale = Math.max(1, Math.min(4, nextScale));
+    if (scale === 1) {
+      offsetX = 0;
+      offsetY = 0;
+    }
+  }
+
+  function toggleZoom() {
+    setZoom(scale > 1 ? 1 : 2);
+  }
+
+  function distanceBetween(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  }
+
+  function handleTouchStart(event) {
+    if (!isImage) return;
+    if (event.touches.length === 2) {
+      gesture = { mode: 'pinch', distance: distanceBetween(event.touches), scale };
+      return;
+    }
+    if (event.touches.length === 1) {
+      const touch = event.touches[0];
+      gesture = {
+        mode: scale > 1 ? 'pan' : 'swipe',
+        x: touch.clientX,
+        y: touch.clientY,
+        offsetX,
+        offsetY
+      };
+    }
+  }
+
+  function handleTouchMove(event) {
+    if (!gesture || !isImage) return;
+    if (gesture.mode === 'pinch' && event.touches.length === 2) {
+      event.preventDefault();
+      setZoom(gesture.scale * distanceBetween(event.touches) / gesture.distance);
+      return;
+    }
+    if (gesture.mode === 'pan' && event.touches.length === 1) {
+      event.preventDefault();
+      const touch = event.touches[0];
+      const boundX = window.innerWidth * (scale - 1) / 2;
+      const boundY = window.innerHeight * (scale - 1) / 2;
+      offsetX = Math.max(-boundX, Math.min(boundX, gesture.offsetX + touch.clientX - gesture.x));
+      offsetY = Math.max(-boundY, Math.min(boundY, gesture.offsetY + touch.clientY - gesture.y));
+    }
+  }
+
+  function handleTouchEnd(event) {
+    if (!gesture) return;
+    if (gesture.mode === 'swipe' && event.changedTouches.length && scale === 1) {
+      const touch = event.changedTouches[0];
+      const dx = touch.clientX - gesture.x;
+      const dy = touch.clientY - gesture.y;
+      const now = Date.now();
+      if (Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+        showItem(activeIndex + (dx < 0 ? 1 : -1));
+      } else if (now - lastTapAt < 320 && Math.abs(dx) < 12 && Math.abs(dy) < 12) {
+        toggleZoom();
+        lastTapAt = 0;
+      } else {
+        lastTapAt = now;
+      }
+    }
+    gesture = null;
+  }
+
+  function handleWheel(event) {
+    if (!isImage) return;
+    event.preventDefault();
+    setZoom(scale + (event.deltaY < 0 ? 0.25 : -0.25));
   }
 
   onMount(() => {
+    activeIndex = Math.max(0, Math.min(initialIndex, gallery.length - 1));
     document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', handleKeydown);
   });
@@ -31,28 +140,58 @@
     </svg>
   </button>
 
-  <a class="download-btn" href={src} download title="下载文件" aria-label="下载文件">
+  {#if isImage}
+    <button class="zoom-btn" on:click={toggleZoom} aria-label={scale > 1 ? '缩小图片' : '放大图片'} title={scale > 1 ? '缩小' : '放大'}>
+      {scale > 1 ? '−' : '+'}
+    </button>
+  {/if}
+
+  <a class="download-btn" href={currentItem.src} download={currentItem.name || undefined} title="下载文件" aria-label="下载文件">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
     </svg>
   </a>
 
-  <div class="lightbox-content">
-    {#if type === 'image' || (!type && src.match(/\.(jpg|jpeg|png|gif|webp|svg)/i))}
-      <img src={src} alt="" class="preview-image" />
-    {:else if type === 'video' || (!type && src.match(/\.(mp4|webm)/i))}
-      <video src={src} controls autoplay playsinline class="preview-video"></video>
-    {:else if type === 'audio' || (!type && src.match(/\.(mp3|wav|ogg)/i))}
-      <div class="audio-wrapper">
-        <div class="audio-icon">🎵</div>
-        <audio src={src} controls autoplay class="preview-audio"></audio>
-      </div>
-    {:else}
-      <div class="unsupported">
-        <p>无法预览此文件</p>
-        <a href={src} download class="download-link">下载文件</a>
-      </div>
-    {/if}
+  {#if gallery.length > 1}
+    <button class="nav-btn previous" on:click={() => showItem(activeIndex - 1)} aria-label="上一张">‹</button>
+    <button class="nav-btn next" on:click={() => showItem(activeIndex + 1)} aria-label="下一张">›</button>
+    <div class="item-count">{activeIndex + 1} / {gallery.length}</div>
+  {/if}
+
+  <div
+    class="lightbox-content"
+    class:zoomed={scale > 1}
+    class:touch-gestures={isImage}
+    on:touchstart={handleTouchStart}
+    on:touchmove|nonpassive={handleTouchMove}
+    on:touchend={handleTouchEnd}
+    on:touchcancel={() => gesture = null}
+    on:wheel|nonpassive={handleWheel}
+  >
+    {#key currentItem.src}
+      {#if currentItem.type === 'image'}
+        <img
+          src={currentItem.src}
+          alt={currentItem.name || ''}
+          class="preview-image"
+          style="transform: translate({offsetX}px, {offsetY}px) scale({scale})"
+          on:dblclick={toggleZoom}
+          draggable="false"
+        />
+      {:else if currentItem.type === 'video'}
+        <video src={currentItem.src} controls autoplay playsinline class="preview-video"></video>
+      {:else if currentItem.type === 'audio'}
+        <div class="audio-wrapper">
+          <div class="audio-icon">🎵</div>
+          <audio src={currentItem.src} controls autoplay class="preview-audio"></audio>
+        </div>
+      {:else}
+        <div class="unsupported">
+          <p>无法预览此文件</p>
+          <a href={currentItem.src} download class="download-link">下载文件</a>
+        </div>
+      {/if}
+    {/key}
   </div>
 </div>
 
@@ -61,7 +200,7 @@
     position: fixed;
     inset: 0;
     z-index: 500;
-    background: rgba(0,0,0,0.92);
+    background: rgba(0,0,0,0.94);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -69,119 +208,75 @@
     animation: fadeIn 0.2s ease;
   }
 
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-
-  .close-btn {
-    position: absolute;
-    top: max(16px, env(safe-area-inset-top));
-    right: max(16px, env(safe-area-inset-right));
-    z-index: 501;
-    background: rgba(255,255,255,0.15);
-    border: none;
-    color: white;
-    cursor: pointer;
-    padding: 10px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 44px;
-    min-height: 44px;
-    backdrop-filter: blur(8px);
-  }
-
-  .close-btn:hover { background: rgba(255,255,255,0.25); }
-
-  .download-btn {
-    position: absolute;
-    top: max(16px, env(safe-area-inset-top));
-    right: calc(max(16px, env(safe-area-inset-right)) + 56px);
-    z-index: 501;
-    background: rgba(255,255,255,0.15);
-    border: none;
-    color: white;
-    cursor: pointer;
-    padding: 10px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 44px;
-    min-height: 44px;
-    backdrop-filter: blur(8px);
-    text-decoration: none;
-  }
-
-  .download-btn:hover { background: rgba(255,255,255,0.25); }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
   .lightbox-content {
-    max-width: 95vw;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
     max-height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
   }
 
+  .lightbox-content.touch-gestures { touch-action: none; }
+  .lightbox-content:not(.touch-gestures) { touch-action: auto; }
+  .lightbox-content.zoomed { cursor: grab; }
+  .lightbox-content.zoomed:active { cursor: grabbing; }
+
   .preview-image {
-    max-width: 95vw;
+    max-width: 100%;
     max-height: 100%;
+    width: auto;
+    height: auto;
     object-fit: contain;
     border-radius: 4px;
     box-shadow: 0 4px 30px rgba(0,0,0,0.5);
     -webkit-touch-callout: default;
+    user-select: none;
+    transition: transform 0.12s ease-out;
+    will-change: transform;
   }
 
-  .preview-video {
-    max-width: 95vw;
-    max-height: 100%;
-    border-radius: 4px;
-    box-shadow: 0 4px 30px rgba(0,0,0,0.5);
-  }
+  .preview-video { max-width: 100%; max-height: 100%; border-radius: 4px; background: #000; }
 
-  .audio-wrapper {
-    text-align: center;
-    padding: 40px;
-  }
-
-  .audio-icon {
-    font-size: 64px;
-    margin-bottom: 16px;
-  }
-
-  .preview-audio {
-    width: 300px;
-    max-width: 80vw;
-  }
-
-  .unsupported {
-    text-align: center;
+  .close-btn, .download-btn, .zoom-btn, .nav-btn {
+    position: absolute;
+    z-index: 501;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: white;
-    padding: 40px;
-  }
-
-  .unsupported p {
-    font-size: 16px;
-    margin-bottom: 12px;
-  }
-
-  .download-link {
-    color: #6366f1;
-    font-size: 14px;
-    text-decoration: underline;
+    background: rgba(255,255,255,0.16);
     cursor: pointer;
+    backdrop-filter: blur(8px);
+    text-decoration: none;
   }
+
+  .close-btn { top: max(16px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); }
+  .download-btn { top: max(16px, env(safe-area-inset-top)); right: calc(max(16px, env(safe-area-inset-right)) + 56px); }
+  .zoom-btn { top: max(16px, env(safe-area-inset-top)); right: calc(max(16px, env(safe-area-inset-right)) + 112px); font-size: 28px; }
+  .nav-btn { top: 50%; transform: translateY(-50%); font-size: 40px; line-height: 1; }
+  .nav-btn.previous { left: max(18px, env(safe-area-inset-left)); }
+  .nav-btn.next { right: max(18px, env(safe-area-inset-right)); }
+  .item-count { position: absolute; bottom: max(16px, env(safe-area-inset-bottom)); color: white; font-size: 14px; z-index: 501; }
+
+  .audio-wrapper { text-align: center; padding: 40px; color: white; }
+  .audio-icon { font-size: 64px; margin-bottom: 16px; }
+  .preview-audio { width: 300px; max-width: 80vw; }
+  .unsupported { text-align: center; color: white; padding: 40px; }
+  .unsupported p { font-size: 16px; margin-bottom: 12px; }
+  .download-link { color: #a5b4fc; font-size: 14px; text-decoration: underline; cursor: pointer; }
 
   @media (max-width: 768px) {
-    .close-btn {
-      top: 8px;
-      right: 8px;
-    }
-    .download-btn {
-      top: 8px;
-      right: 60px;
-    }
+    .nav-btn { width: 40px; height: 48px; background: rgba(0,0,0,0.35); }
+    .nav-btn.previous { left: max(8px, env(safe-area-inset-left)); }
+    .nav-btn.next { right: max(8px, env(safe-area-inset-right)); }
   }
 </style>

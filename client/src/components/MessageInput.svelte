@@ -1,5 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { getAttachmentMessageType } from '../utils/messageTypes.js';
+  import { uploadAttachment } from '../utils/uploadAttachment.js';
 
   export let onSend;
   export let roomId;
@@ -34,26 +36,9 @@
   }
 
   async function uploadFile(file) {
-    let limit = 52428800;
-    try {
-      const config = await fetch('/api/config').then(r => r.json());
-      limit = config.server?.upload_limit || limit;
-    } catch (_) { /* use the fallback while offline */ }
-
-    if (file.size > limit) {
-      alert(`文件大小超过限制 (${(limit / 1024 / 1024).toFixed(0)}MB)`);
-      return;
-    }
-
     uploading = true;
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      return data;
+      return await uploadAttachment(file);
     } catch (e) {
       alert('上传失败: ' + e.message);
       return null;
@@ -62,21 +47,13 @@
     }
   }
 
-  function determineType(mime) {
-    if (!mime) return 'file';
-    if (mime.startsWith('image/')) return 'image';
-    if (mime.startsWith('video/')) return 'video';
-    if (mime.startsWith('audio/')) return 'audio';
-    return 'file';
-  }
-
   async function handleFileSelect(e) {
     const files = e.target.files;
     for (const file of files) {
       const uploaded = await uploadFile(file);
       if (uploaded) {
         onSend?.({
-          type: determineType(file.type),
+          type: getAttachmentMessageType(uploaded.mimetype),
           content: '',
           file: uploaded
         });
@@ -93,7 +70,7 @@
         const uploaded = await uploadFile(file);
         if (uploaded) {
           onSend?.({
-            type: determineType(file.type),
+            type: getAttachmentMessageType(uploaded.mimetype),
             content: '',
             file: uploaded
           });
@@ -111,7 +88,7 @@
         const uploaded = await uploadFile(file);
         if (uploaded) {
           onSend?.({
-            type: determineType(file.type),
+            type: getAttachmentMessageType(uploaded.mimetype),
             content: '',
             file: uploaded
           });

@@ -10,17 +10,21 @@
   import SearchBar from './SearchBar.svelte';
   import Lightbox from './Lightbox.svelte';
   import Settings from './Settings.svelte';
+  import { getMediaKind } from '../utils/messageTypes.js';
 
   let socket;
   let sidebarOpen = false;
   let isMobile = false;
   let lightboxSrc = '';
   let lightboxType = '';
+  let lightboxItems = [];
+  let lightboxIndex = 0;
   let showSettings = false;
   let pageSize = 50;
   let online = typeof navigator === 'undefined' ? true : navigator.onLine;
   let cachedView = false;
   let started = false;
+  let sendError = '';
 
   function updateOnlineStatus() { online = navigator.onLine; }
 
@@ -182,8 +186,20 @@
   }
 
   function handleSendMessage(data) {
-    if (!socket || !$currentRoomId) return;
-    socket.emit('message:send', { roomId: $currentRoomId, ...data });
+    if (!socket?.connected || !$currentRoomId) {
+      sendError = '当前未连接服务器，消息没有发送';
+      return;
+    }
+    sendError = '';
+    socket.timeout(8000).emit('message:send', { roomId: $currentRoomId, ...data }, (timeoutError, result) => {
+      if (timeoutError) {
+        sendError = '发送确认超时，请检查连接后重试';
+      } else if (!result?.ok) {
+        sendError = result?.error || '消息发送失败';
+      } else {
+        sendError = '';
+      }
+    });
   }
 
   function handleTogglePermanent(detail) {
@@ -219,7 +235,21 @@
     });
   }
 
-  function handleMediaPreview({ src, type }) {
+  function handleMediaPreview({ messageId, src, type }) {
+    const roomMessages = $messages[$currentRoomId] || [];
+    lightboxItems = roomMessages
+      .filter(message => message.file_url && ['image', 'video'].includes(getMediaKind(message.mime_type)))
+      .map(message => ({
+        id: message.id,
+        src: '/uploads/' + message.file_url,
+        type: getMediaKind(message.mime_type),
+        name: message.file_name || ''
+      }));
+    lightboxIndex = lightboxItems.findIndex(item => item.id === messageId);
+    if (lightboxIndex < 0) {
+      lightboxItems = [{ id: messageId, src, type, name: '' }];
+      lightboxIndex = 0;
+    }
     lightboxSrc = src;
     lightboxType = type;
   }
@@ -260,6 +290,9 @@
         {!online ? '离线模式：显示此设备已缓存的聊天记录' : '当前显示本地缓存记录'}
       </div>
     {/if}
+    {#if sendError}
+      <div class="send-error" role="alert">{sendError}</div>
+    {/if}
     <div class="top-bar">
       {#if isMobile}
         <button class="hamburger" on:click={toggleSidebar} aria-label="菜单">
@@ -294,7 +327,7 @@
 </div>
 
 {#if lightboxSrc}
-  <Lightbox src={lightboxSrc} type={lightboxType} onClose={closeLightbox} />
+  <Lightbox src={lightboxSrc} type={lightboxType} items={lightboxItems} initialIndex={lightboxIndex} onClose={closeLightbox} />
 {/if}
 
 {#if showSettings}
@@ -367,6 +400,15 @@
     color: #713f12;
     background: #fef3c7;
     border-bottom: 1px solid #fde68a;
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .send-error {
+    padding: 8px 14px;
+    color: #991b1b;
+    background: #fee2e2;
+    border-bottom: 1px solid #fecaca;
     font-size: 13px;
     text-align: center;
   }

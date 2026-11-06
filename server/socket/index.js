@@ -31,16 +31,36 @@ function setupSocket(io) {
       })));
     });
 
-    socket.on('message:send', (data) => {
+    socket.on('message:send', (data = {}, acknowledge) => {
+      const respond = typeof acknowledge === 'function' ? acknowledge : () => {};
       const { roomId, type, content, file } = data;
       console.log(`[socket] message:send from ${socket.userId} room=${roomId} type=${type} content="${(content||'').substring(0,30)}"`);
-      if (!roomId || !type || !socket.userId) {
-        console.log('[socket] message:send REJECTED - missing roomId/type/userId', { roomId, type, userId: socket.userId });
+      if (!roomId || !socket.userId) {
+        respond({ ok: false, error: '无法识别当前聊天室或用户' });
         return;
       }
 
       const user = onlineUsers.get(socket.userId);
-      if (!user) return;
+      if (!user) {
+        respond({ ok: false, error: '请重新连接聊天室后再发送' });
+        return;
+      }
+
+      if (!['text', 'image', 'file'].includes(type)) {
+        respond({ ok: false, error: '不支持的消息类型' });
+        return;
+      }
+
+      if (type !== 'text' && (!file || !file.filename)) {
+        respond({ ok: false, error: '附件信息缺失，请重新选择文件' });
+        return;
+      }
+
+      const room = db.prepare('SELECT id FROM rooms WHERE id = ?').get(roomId);
+      if (!room) {
+        respond({ ok: false, error: '聊天室不存在或已被删除' });
+        return;
+      }
 
       const msg = {
         id: uuidv4(),
@@ -58,14 +78,20 @@ function setupSocket(io) {
         created_at: new Date().toISOString()
       };
 
-      db.prepare(`
-        INSERT INTO messages (id, room_id, user_id, user_nickname, user_avatar_color,
-          type, content, file_url, file_name, file_size, mime_type, is_permanent, created_at)
-        VALUES (@id, @room_id, @user_id, @user_nickname, @user_avatar_color,
-          @type, @content, @file_url, @file_name, @file_size, @mime_type, @is_permanent, @created_at)
-      `).run(msg);
+      try {
+        db.prepare(`
+          INSERT INTO messages (id, room_id, user_id, user_nickname, user_avatar_color,
+            type, content, file_url, file_name, file_size, mime_type, is_permanent, created_at)
+          VALUES (@id, @room_id, @user_id, @user_nickname, @user_avatar_color,
+            @type, @content, @file_url, @file_name, @file_size, @mime_type, @is_permanent, @created_at)
+        `).run(msg);
 
-      io.to(roomId).emit('message:new', msg);
+        io.to(roomId).emit('message:new', msg);
+        respond({ ok: true, id: msg.id });
+      } catch (error) {
+        console.error('[socket] failed to save message:', error);
+        respond({ ok: false, error: '消息保存失败，请重试' });
+      }
     });
 
     socket.on('message:delete', (data) => {
