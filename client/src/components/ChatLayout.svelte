@@ -4,6 +4,7 @@
   import { currentUser } from '../stores/user.js';
   import { rooms, currentRoomId, onlineUsers, incrementUnread, clearUnread, removeRoom, renameRoom } from '../stores/rooms.js';
   import { messages, addMessage, updateMessage, setMessages, removeMessage, prependMessages } from '../stores/messages.js';
+  import { cacheMessages, cacheRooms, getCachedMessages, getCachedRooms } from '../stores/offline.js';
   import RoomList from './RoomList.svelte';
   import ChatRoom from './ChatRoom.svelte';
   import SearchBar from './SearchBar.svelte';
@@ -17,6 +18,11 @@
   let lightboxType = '';
   let showSettings = false;
   let pageSize = 50;
+  let online = typeof navigator === 'undefined' ? true : navigator.onLine;
+  let cachedView = false;
+  let started = false;
+
+  function updateOnlineStatus() { online = navigator.onLine; }
 
   function checkMobile() {
     isMobile = window.innerWidth <= 768;
@@ -26,49 +32,84 @@
   onMount(() => {
     checkMobile();
     window.addEventListener('resize', checkMobile);
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
+    };
   });
 
   onMount(async () => {
-    const res = await fetch('/api/rooms');
-    const roomList = await res.json();
-    rooms.set(roomList);
+    started = true;
+    let roomList = [];
+    try {
+      const res = await fetch('/api/rooms');
+      if (!res.ok) throw new Error('rooms unavailable');
+      roomList = await res.json();
+      rooms.set(roomList);
+      cacheRooms(roomList).catch(console.warn);
+    } catch (e) {
+      roomList = await getCachedRooms().catch(() => []);
+      rooms.set(roomList);
+      cachedView = roomList.length > 0;
+    }
 
-    if (roomList.length > 0) {
+    if (roomList.length > 0 && !$currentRoomId) {
       currentRoomId.set(roomList[0].id);
     }
 
-    socket = io();
+    if (!online) {
+      if ($currentRoomId) {
+        await loadMessages($currentRoomId);
+        cachedView = true;
+      }
+      return;
+    }
 
+    connectSocket();
+  });
+
+  function connectSocket() {
+    if (socket || !online) return;
+    socket = io();
     socket.on('connect', () => {
       const user = $currentUser;
-      if (user) {
-        socket.emit('user:join', user);
-        if ($currentRoomId) {
-          socket.emit('room:join', $currentRoomId);
-          loadMessages($currentRoomId);
-        }
+      if (!user) return;
+      socket.emit('user:join', user);
+      if ($currentRoomId) {
+        socket.emit('room:join', $currentRoomId);
+        loadMessages($currentRoomId);
       }
     });
-
-    socket.on('users:online', (list) => onlineUsers.set(list));
-    socket.on('message:new', (msg) => {
+    socket.on('users:online', list => onlineUsers.set(list));
+    socket.on('message:new', msg => {
       addMessage(msg.room_id, msg);
+      cacheMessages(msg.room_id, [msg]).catch(console.warn);
       if ($currentRoomId !== msg.room_id) incrementUnread(msg.room_id);
     });
-    socket.on('message:updated', (msg) => updateMessage(msg));
-    socket.on('message:deleted', (data) => removeMessage(data.room_id, data.id));
-    socket.on('room:renamed', (data) => renameRoom(data.id, data.name));
-    socket.on('room:deleted', (data) => {
-      removeRoom(data.id);
-      if ($currentRoomId === data.id) {
-        const roomList = $rooms;
-        const fallback = roomList.find(r => r.id !== data.id);
-        if (fallback) currentRoomId.set(fallback.id);
-      }
+    socket.on('message:updated', msg => {
+      updateMessage(msg);
+      cacheMessages(msg.room_id, [msg]).catch(console.warn);
     });
-    socket.on('room:user_joined', () => {});
-    socket.on('room:user_left', () => {});
-  });
+    socket.on('message:deleted', data => removeMessage(data.room_id, data.id));
+    socket.on('room:renamed', data => {
+      renameRoom(data.id, data.name);
+      cacheRooms($rooms).catch(console.warn);
+    });
+    socket.on('room:deleted', data => {
+      removeRoom(data.id);
+      cacheRooms($rooms.filter(room => room.id !== data.id)).catch(console.warn);
+      if ($currentRoomId === data.id && $rooms[0]) currentRoomId.set($rooms[0].id);
+    });
+  }
+
+  $: if (started && online && $currentUser && !socket) connectSocket();
+
+  $: if (started && !online && $currentRoomId && !cachedView) {
+    loadMessages($currentRoomId).then(() => { cachedView = true; });
+  }
 
   onDestroy(() => {
     socket?.disconnect();
@@ -89,22 +130,34 @@
   async function loadMessages(roomId) {
     try {
       const res = await fetch(`/api/messages/${roomId}?limit=${pageSize}`);
+      if (!res.ok) throw new Error('messages unavailable');
       const msgs = await res.json();
       setMessages(roomId, msgs);
+      cacheMessages(roomId, msgs).catch(console.warn);
+      cachedView = false;
     } catch (e) {
-      console.error('Failed to load messages:', e);
+      const cached = await getCachedMessages(roomId).catch(() => []);
+      if (cached.length) {
+        setMessages(roomId, cached);
+        cachedView = true;
+      } else {
+        console.error('Failed to load messages:', e);
+      }
     }
   }
 
   async function loadMoreMessages(roomId) {
+    if (!online) return false;
     try {
       const roomMsgs = $messages[roomId] || [];
       if (roomMsgs.length === 0) return false;
       const oldest = roomMsgs[0].created_at;
       const res = await fetch(`/api/messages/${roomId}?limit=${pageSize}&before=${encodeURIComponent(oldest)}`);
+      if (!res.ok) return false;
       const msgs = await res.json();
       if (msgs.length === 0) return false;
       prependMessages(roomId, msgs);
+      cacheMessages(roomId, msgs).catch(console.warn);
       return msgs.length >= pageSize;
     } catch (e) {
       console.error('Failed to load more messages:', e);
@@ -122,7 +175,10 @@
   loadConfig();
 
   function refreshRooms() {
-    fetch('/api/rooms').then(r => r.json()).then(data => rooms.set(data));
+    fetch('/api/rooms').then(r => r.json()).then(data => {
+      rooms.set(data);
+      cacheRooms(data).catch(console.warn);
+    });
   }
 
   function handleSendMessage(data) {
@@ -199,6 +255,11 @@
   </aside>
 
   <main class="main-area">
+    {#if !online || cachedView}
+      <div class="offline-banner" role="status">
+        {!online ? '离线模式：显示此设备已缓存的聊天记录' : '当前显示本地缓存记录'}
+      </div>
+    {/if}
     <div class="top-bar">
       {#if isMobile}
         <button class="hamburger" on:click={toggleSidebar} aria-label="菜单">
@@ -296,6 +357,15 @@
     flex-direction: column;
     min-width: 0;
     min-height: 0;
+  }
+
+  .offline-banner {
+    padding: 8px 14px;
+    color: #713f12;
+    background: #fef3c7;
+    border-bottom: 1px solid #fde68a;
+    font-size: 13px;
+    text-align: center;
   }
 
   .top-bar {

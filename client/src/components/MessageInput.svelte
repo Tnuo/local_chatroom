@@ -34,8 +34,11 @@
   }
 
   async function uploadFile(file) {
-    const config = await fetch('/api/config').then(r => r.json());
-    const limit = config.server?.upload_limit || 52428800;
+    let limit = 52428800;
+    try {
+      const config = await fetch('/api/config').then(r => r.json());
+      limit = config.server?.upload_limit || limit;
+    } catch (_) { /* use the fallback while offline */ }
 
     if (file.size > limit) {
       alert(`文件大小超过限制 (${(limit / 1024 / 1024).toFixed(0)}MB)`);
@@ -172,6 +175,7 @@
         on:paste={handlePaste}
         placeholder={isMobile ? '输入消息...' : '输入消息... (Enter 发送)'}
         rows="1"
+        aria-label="输入消息"
         inputmode="text"
         enterkeyhint="send"
       ></textarea>
@@ -181,7 +185,7 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="send-icon">
         <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
       </svg>
-      {#if !isMobile && !uploading}发送{/if}
+      {#if uploading}{isMobile ? '…' : '上传中…'}{:else if !isMobile}发送{/if}
     </button>
   </div>
 </div>

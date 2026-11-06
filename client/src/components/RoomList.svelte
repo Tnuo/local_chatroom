@@ -17,6 +17,7 @@
   let contextMenu = null;
   let renameRoomId = null;
   let renameRoomValue = '';
+  let longPressTimer = null;
 
   function switchRoom(id) {
     onRoomSwitch?.(id);
@@ -85,10 +86,21 @@
   function startLongPress(e, room) {
     clearTimeout(longPressTimer);
     longPressActive = false;
+    const point = e.touches?.[0];
+    const x = point?.clientX || e.clientX || 0;
+    const y = point?.clientY || e.clientY || 0;
     longPressTimer = setTimeout(() => {
       longPressActive = true;
-      showContextMenu(e, room);
+      showContextMenu({ preventDefault() {}, stopPropagation() {}, clientX: x, clientY: y }, room);
     }, 600);
+  }
+
+  function handleContextMenuKeydown(e, room) {
+    if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+      e.preventDefault();
+      const rect = e.currentTarget.getBoundingClientRect();
+      showContextMenu({ preventDefault() {}, stopPropagation() {}, clientX: rect.left, clientY: rect.bottom }, room);
+    }
   }
 
   function cancelLongPress() {
@@ -121,14 +133,14 @@
           </svg>
         </button>
       {/if}
-      <button class="btn-logout" on:click={handleLogout} title="退出">↪</button>
+      <button class="btn-logout" on:click={handleLogout} title="退出" aria-label="退出登录">↪</button>
     </div>
   </div>
 
   <div class="room-section">
     <div class="section-title">
       <span>聊天房间</span>
-      <button class="btn-add-room" on:click={() => showNewRoom = !showNewRoom} title="创建房间">
+      <button class="btn-add-room" on:click={() => showNewRoom = !showNewRoom} title="创建房间" aria-label="创建房间">
         {showNewRoom ? '−' : '+'}
       </button>
     </div>
@@ -162,7 +174,10 @@
           <button
             class="room-item"
             class:active={room.id === currentRoomId}
+            aria-current={room.id === currentRoomId ? 'page' : undefined}
+            aria-label={`房间 ${room.name}${($unread[room.id] || 0) > 0 ? `，${$unread[room.id]} 条未读` : ''}。长按或右键打开房间菜单`}
             on:click={(e) => handleRoomClick(e, room)}
+            on:keydown={(e) => handleContextMenuKeydown(e, room)}
             on:contextmenu|preventDefault={(e) => showContextMenu(e, room)}
             on:touchstart={(e) => startLongPress(e, room)}
             on:touchend={cancelLongPress}
@@ -171,7 +186,7 @@
           >
             <span class="room-hash">#</span>
             <span class="room-name">{room.name}</span>
-            {#if ($unread[room.id] || 0) > 0 && room.id !== currentRoomId}
+        {#if ($unread[room.id] || 0) > 0 && room.id !== currentRoomId}
               <span class="badge">{$unread[room.id]}</span>
             {/if}
           </button>

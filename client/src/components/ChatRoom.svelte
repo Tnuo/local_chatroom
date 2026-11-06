@@ -22,13 +22,13 @@
 
   function handleScroll() {
     if (!messageContainer) return;
-    const { scrollTop, scrollHeight, clientHeight } = messageContainer;
-    const distFromVisualTop = scrollHeight - scrollTop - clientHeight;
+    const { scrollTop } = messageContainer;
+    const distFromVisualTop = scrollTop;
 
     if (distFromVisualTop < 120 && hasMore && !loadingMore) {
       loadingMore = true;
       prefetchHeight = messageContainer.scrollHeight - messageContainer.scrollTop;
-      onLoadMore?.().then(more => {
+      Promise.resolve(onLoadMore?.()).then(more => {
         hasMore = more !== false;
         loadingMore = false;
       });
