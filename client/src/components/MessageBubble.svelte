@@ -143,6 +143,7 @@
     flex-direction: column;
     max-width: 65%;
     min-width: 0;
+    flex-shrink: 1;
   }
 
   .msg-row.mine .msg-body {
@@ -163,6 +164,8 @@
     padding: 8px 14px;
     box-shadow: 0 1px 2px rgba(0,0,0,0.04);
     position: relative;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .bubble.mine {
@@ -243,9 +246,12 @@
     align-items: center;
     gap: 10px;
     padding: 8px;
+    width: 100%;
+    max-width: 100%;
     background: rgba(0,0,0,0.05);
     border-radius: 10px;
     min-width: 0;
+    overflow: hidden;
   }
 
   .bubble.mine .file-card {

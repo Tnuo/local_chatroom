@@ -329,6 +329,7 @@
       onRoomRename={handleRoomRename}
       onRoomDelete={handleRoomDelete}
       {isMobile}
+      {sidebarOpen}
       onCloseSidebar={closeSidebar}
     />
   </aside>

@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
 
   export let src = '';
   export let type = 'image';
@@ -35,6 +35,10 @@
   let closeScale = 1;
   let overlayOpacity = 0.94;
   let closeTimer;
+  let slideDirection = '';
+  let slideTimer;
+  let controlsVisible = true;
+  let suppressClickUntil = 0;
 
   $: currentItem = gallery[Math.min(activeIndex, gallery.length - 1)] || { src, type, name: '' };
   $: isImage = currentItem.type === 'image';
@@ -63,10 +67,17 @@
 
   function handleKeydown(event) {
     if (event.key === 'Escape') animateClose();
+    const interactiveTarget = event.target instanceof Element
+      && event.target.closest('button, a, input, textarea, select, video, audio, [contenteditable="true"]');
+    if (interactiveTarget) return;
     if (event.key === 'ArrowRight') showItem(activeIndex + 1);
     if (event.key === 'ArrowLeft') showItem(activeIndex - 1);
     if (event.key === '+' || event.key === '=') setZoom(Math.min(4, scale + 0.5));
     if (event.key === '-') setZoom(Math.max(1, scale - 0.5));
+    if (event.key === ' ') {
+      event.preventDefault();
+      controlsVisible = !controlsVisible;
+    }
   }
 
   function handleOverlayClick(event) {
@@ -93,6 +104,17 @@
     closeTimer = window.setTimeout(() => onClose?.(), 280);
   }
 
+  async function transitionTo(index, direction = index > activeIndex ? 'next' : 'previous') {
+    slideDirection = '';
+    window.clearTimeout(slideTimer);
+    await tick();
+    activeIndex = index;
+    slideDirection = direction;
+    resetZoom();
+    preloadNeighborImages();
+    slideTimer = window.setTimeout(() => slideDirection = '', 240);
+  }
+
   async function showItem(index) {
     if (index < 0 && olderAvailable) {
       await loadMore('older');
@@ -103,9 +125,7 @@
       return;
     }
     if (index < 0 || index >= gallery.length) return;
-    activeIndex = (index + gallery.length) % gallery.length;
-    resetZoom();
-    preloadNeighborImages();
+    await transitionTo((index + gallery.length) % gallery.length);
   }
 
   async function loadMore(direction) {
@@ -120,17 +140,15 @@
       const newItems = (page?.items || []).filter(item => !existingIds.has(item.id));
       if (direction === 'older') {
         gallery = [...newItems, ...gallery];
-        if (newItems.length) activeIndex = newItems.length - 1;
+        if (newItems.length) await transitionTo(newItems.length - 1, 'previous');
         olderAvailable = Boolean(page?.hasMore);
       } else {
         const oldLength = gallery.length;
         gallery = [...gallery, ...newItems];
-        if (newItems.length) activeIndex = oldLength;
+        if (newItems.length) await transitionTo(oldLength, 'next');
         newerAvailable = Boolean(page?.hasMore);
       }
       if (!newItems.length && page?.hasMore) moreError = '没有取得新媒体，请重试';
-      if (newItems.length) resetZoom();
-      if (newItems.length) preloadNeighborImages();
     } catch (error) {
       moreError = error.message || '媒体加载失败';
     } finally {
@@ -208,20 +226,26 @@
 
   function handleTouchEnd(event) {
     if (!gesture) return;
-    if (gesture.mode === 'swipe' && event.changedTouches.length && scale === 1) {
+    if (event.changedTouches.length) suppressClickUntil = Date.now() + 500;
+    if ((gesture.mode === 'swipe' || gesture.mode === 'pan') && event.changedTouches.length) {
       const touch = event.changedTouches[0];
       const dx = touch.clientX - gesture.x;
       const dy = touch.clientY - gesture.y;
       const now = Date.now();
-      if (dy > 120 && dy > Math.abs(dx) * 1.2) {
+      const isTap = Math.abs(dx) < 12 && Math.abs(dy) < 12;
+      if (gesture.mode === 'swipe' && scale === 1 && dy > 120 && dy > Math.abs(dx) * 1.2) {
         animateClose();
-      } else if (Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      } else if (gesture.mode === 'swipe' && scale === 1 && Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.2) {
         showItem(activeIndex + (dx < 0 ? 1 : -1));
-      } else if (now - lastTapAt < 320 && Math.abs(dx) < 12 && Math.abs(dy) < 12) {
+      } else if (gesture.mode === 'swipe' && scale === 1 && isTap && now - lastTapAt < 320) {
         toggleZoom();
+        controlsVisible = true;
         lastTapAt = 0;
-      } else {
+      } else if (isTap) {
+        controlsVisible = !controlsVisible;
         lastTapAt = now;
+      } else {
+        lastTapAt = 0;
       }
     }
     if (!closing) {
@@ -229,6 +253,16 @@
       overlayOpacity = 0.94;
     }
     gesture = null;
+  }
+
+  function handleContentPointerUp(event) {
+    if (event.pointerType !== 'mouse' || Date.now() < suppressClickUntil) return;
+    controlsVisible = !controlsVisible;
+  }
+
+  function handleDoubleClick() {
+    controlsVisible = true;
+    toggleZoom();
   }
 
   function handleWheel(event) {
@@ -304,42 +338,43 @@
     document.body.style.overflow = '';
     window.removeEventListener('keydown', handleKeydown);
     window.clearTimeout(closeTimer);
+    window.clearTimeout(slideTimer);
   });
 </script>
 
 <div class="lightbox-overlay" class:closing style="--overlay-opacity: {overlayOpacity}" on:click={handleOverlayClick}>
-  <button class="close-btn" on:click={animateClose} aria-label="关闭">
+  <button class="close-btn" class:ui-hidden={!controlsVisible} on:click={animateClose} aria-label="关闭">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
       <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
     </svg>
   </button>
 
   {#if isImage}
-    <button class="zoom-btn" on:click={toggleZoom} aria-label={scale > 1 ? '缩小图片' : '放大图片'} title={scale > 1 ? '缩小' : '放大'}>
+    <button class="zoom-btn" class:ui-hidden={!controlsVisible} on:click={toggleZoom} aria-label={scale > 1 ? '缩小图片' : '放大图片'} title={scale > 1 ? '缩小' : '放大'}>
       {scale > 1 ? '−' : '+'}
     </button>
   {/if}
 
-  <button class="offline-btn" class:saved={cacheSaved} on:click={saveForOffline} disabled={cacheSaved || cacheSaving || !('caches' in window)} aria-label={cacheSaved ? '已保存到离线缓存' : '保存媒体供离线查看'}>
+  <button class="offline-btn" class:saved={cacheSaved} class:ui-hidden={!controlsVisible} on:click={saveForOffline} disabled={cacheSaved || cacheSaving || !('caches' in window)} aria-label={cacheSaved ? '已保存到离线缓存' : '保存媒体供离线查看'}>
     {cacheSaved ? '已离线' : cacheSaving ? (cacheProgress === null ? '保存中…' : `保存中 ${cacheProgress}%`) : '离线保存'}
   </button>
 
-  <a class="download-btn" href={currentItem.src} download={currentItem.name || undefined} title="下载文件" aria-label="下载文件">
+  <a class="download-btn" class:ui-hidden={!controlsVisible} href={currentItem.src} download={currentItem.name || undefined} title="下载文件" aria-label="下载文件">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
     </svg>
   </a>
 
   {#if gallery.length > 1 || olderAvailable || newerAvailable}
-    <button class="nav-btn previous" on:click={() => showItem(activeIndex - 1)} aria-label="上一张">‹</button>
-    <button class="nav-btn next" on:click={() => showItem(activeIndex + 1)} aria-label="下一张">›</button>
-    <div class="item-count">{activeIndex + 1} / {gallery.length}</div>
+    <button class="nav-btn previous" class:ui-hidden={!controlsVisible} on:click={() => showItem(activeIndex - 1)} aria-label="上一张">‹</button>
+    <button class="nav-btn next" class:ui-hidden={!controlsVisible} on:click={() => showItem(activeIndex + 1)} aria-label="下一张">›</button>
+    <div class="item-count" class:ui-hidden={!controlsVisible}>{activeIndex + 1} / {gallery.length}</div>
   {/if}
 
   {#if moreLoading}
-    <div class="media-status" role="status">正在加载{moreLoading === 'older' ? '更早' : '更新'}媒体…</div>
+    <div class="media-status" class:ui-hidden={!controlsVisible} role="status">正在加载{moreLoading === 'older' ? '更早' : '更新'}媒体…</div>
   {:else if moreError || cacheError}
-    <div class="media-status error" role="status">{moreError || cacheError}</div>
+    <div class="media-status error" class:ui-hidden={!controlsVisible} role="status">{moreError || cacheError}</div>
   {/if}
 
   <div
@@ -347,6 +382,9 @@
     class:zoomed={scale > 1}
     class:touch-gestures={isImage}
     class:closing
+    class:slide-next={slideDirection === 'next'}
+    class:slide-previous={slideDirection === 'previous'}
+    on:pointerup={handleContentPointerUp}
     on:touchstart={handleTouchStart}
     on:touchmove|nonpassive={handleTouchMove}
     on:touchend={handleTouchEnd}
@@ -361,7 +399,7 @@
           class="preview-image"
           style="transform: translate({offsetX + closeX}px, {offsetY + dragY + closeY}px) scale({scale * closeScale})"
           class:closing
-          on:dblclick={toggleZoom}
+          on:dblclick={handleDoubleClick}
           draggable="false"
         />
       {:else if currentItem.type === 'video'}
@@ -408,6 +446,11 @@
     overflow: hidden;
   }
 
+  .lightbox-content.slide-next { animation: slideFromRight 0.24s cubic-bezier(.2,.75,.25,1); }
+  .lightbox-content.slide-previous { animation: slideFromLeft 0.24s cubic-bezier(.2,.75,.25,1); }
+  @keyframes slideFromRight { from { transform: translateX(36px); opacity: 0.45; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes slideFromLeft { from { transform: translateX(-36px); opacity: 0.45; } to { transform: translateX(0); opacity: 1; } }
+
   .lightbox-content.touch-gestures { touch-action: none; }
   .lightbox-content:not(.touch-gestures) { touch-action: auto; }
   .lightbox-content.zoomed { cursor: grab; }
@@ -446,6 +489,9 @@
     backdrop-filter: blur(8px);
     text-decoration: none;
   }
+  .close-btn, .download-btn, .zoom-btn, .nav-btn, .offline-btn,
+  .item-count, .media-status { transition: opacity 0.16s ease; }
+  .ui-hidden { opacity: 0; pointer-events: none; }
 
   .close-btn { top: max(16px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); }
   .download-btn { top: max(16px, env(safe-area-inset-top)); right: calc(max(16px, env(safe-area-inset-right)) + 56px); }
@@ -471,5 +517,11 @@
     .nav-btn { width: 40px; height: 48px; background: rgba(0,0,0,0.35); }
     .nav-btn.previous { left: max(8px, env(safe-area-inset-left)); }
     .nav-btn.next { right: max(8px, env(safe-area-inset-right)); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lightbox-content.slide-next, .lightbox-content.slide-previous,
+    .close-btn, .download-btn, .zoom-btn, .nav-btn, .offline-btn,
+    .item-count, .media-status { animation-duration: 0.01ms; transition-duration: 0.01ms; }
   }
 </style>

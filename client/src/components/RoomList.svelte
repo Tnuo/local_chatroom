@@ -1,4 +1,5 @@
 <script>
+  import { onDestroy, onMount } from 'svelte';
   import { currentUser } from '../stores/user.js';
   import { unreadStore as unread } from '../stores/rooms.js';
 
@@ -11,6 +12,7 @@
   export let onRoomDelete;
   export let isMobile = false;
   export let onCloseSidebar;
+  export let sidebarOpen = false;
 
   let showNewRoom = false;
   let newRoomName = '';
@@ -18,8 +20,28 @@
   let renameRoomId = null;
   let renameRoomValue = '';
   let longPressTimer = null;
+  let longPressActive = false;
+
+  function handleGlobalKeydown(event) {
+    if (event.key === 'Escape' && contextMenu) closeContextMenu();
+  }
+
+  onMount(() => window.addEventListener('keydown', handleGlobalKeydown));
+  onDestroy(() => {
+    cancelLongPress();
+    window.removeEventListener('keydown', handleGlobalKeydown);
+  });
+
+  $: if (isMobile && !sidebarOpen) {
+    closeContextMenu();
+    cancelLongPress();
+    longPressActive = false;
+  }
 
   function switchRoom(id) {
+    closeContextMenu();
+    cancelLongPress();
+    longPressActive = false;
     onRoomSwitch?.(id);
   }
 
@@ -54,12 +76,13 @@
 
   function closeContextMenu() {
     contextMenu = null;
+    longPressActive = false;
   }
 
   function startRename() {
     renameRoomId = contextMenu.room.id;
     renameRoomValue = contextMenu.room.name;
-    contextMenu = null;
+    closeContextMenu();
   }
 
   function submitRename() {
@@ -70,7 +93,7 @@
 
   function confirmDelete() {
     const room = contextMenu.room;
-    contextMenu = null;
+    closeContextMenu();
     if (window.confirm(`确定删除房间 "${room.name}"？\n所有消息将被永久删除。`)) {
       onRoomDelete?.({ roomId: room.id });
     }
@@ -80,8 +103,6 @@
     if (e.key === 'Enter') submitRename();
     if (e.key === 'Escape') renameRoomId = null;
   }
-
-  let longPressActive = false;
 
   function startLongPress(e, room) {
     clearTimeout(longPressTimer);
@@ -215,7 +236,7 @@
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="context-overlay" on:click|stopPropagation={closeContextMenu} on:contextmenu|preventDefault={closeContextMenu}>
-    <div class="context-menu" style="left: {Math.min(contextMenu.x, window.innerWidth - 160)}px; top: {Math.min(contextMenu.y, window.innerHeight - 100)}px;">
+    <div class="context-menu" role="dialog" aria-label="房间操作" style="left: {Math.max(8, Math.min(contextMenu.x, window.innerWidth - 168))}px; top: {Math.max(8, Math.min(contextMenu.y, window.innerHeight - 108))}px;">
       <button on:click|stopPropagation={startRename}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
         重命名
