@@ -1,8 +1,6 @@
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { VitePWA } from 'vite-plugin-pwa';
-import { RangeRequestsPlugin } from 'workbox-range-requests';
-
 export default defineConfig({
   plugins: [
     svelte(),
@@ -35,7 +33,7 @@ export default defineConfig({
             options: {
               cacheName: 'chat-uploads',
               expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 30 },
-              plugins: [new RangeRequestsPlugin()]
+              rangeRequests: true
             }
           }
         ]
