@@ -6,7 +6,6 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { getConfig } = require('../config');
 const { UPLOADS_DIR } = require('../paths');
-const { normalizeExtension, normalizeExtensions } = require('../fileTypes');
 
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -22,15 +21,6 @@ function createUpload() {
   const config = getConfig();
   return multer({
     storage,
-    fileFilter: (_req, file, cb) => {
-      const ext = normalizeExtension(path.extname(file.originalname));
-      const allowed = new Set(normalizeExtensions(config.files?.allowed_extensions));
-      if (allowed.has(ext)) {
-        cb(null, true);
-      } else {
-        cb(new Error(`文件类型 ${ext || '(无扩展名)'} 不被允许`));
-      }
-    },
     limits: { fileSize: config.server?.upload_limit || 52428800 }
   });
 }

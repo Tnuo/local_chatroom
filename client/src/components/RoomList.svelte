@@ -154,7 +154,13 @@
           </svg>
         </button>
       {/if}
-      <button class="btn-logout" on:click={handleLogout} title="退出" aria-label="退出登录">↪</button>
+      <button class="btn-logout" on:click={handleLogout} title="退出" aria-label="退出登录">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M10 17l5-5-5-5" />
+          <path d="M15 12H3" />
+          <path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6" />
+        </svg>
+      </button>
     </div>
   </div>
 
@@ -289,7 +295,8 @@
 
   .btn-logout {
     background: none; border: none; color: #a6adc8; font-size: 18px; cursor: pointer;
-    padding: 4px 8px; border-radius: 6px; min-width: 36px; min-height: 36px;
+    padding: 4px 8px; border-radius: 6px; min-width: 40px; min-height: 40px;
+    display: flex; align-items: center; justify-content: center;
   }
   .btn-logout:hover { background: #313244; }
 

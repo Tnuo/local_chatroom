@@ -7,7 +7,6 @@
   const dispatch = createEventDispatcher();
 
   let config = null;
-  let newExt = '';
   let saveMsg = '';
   let loading = false;
 
@@ -20,21 +19,6 @@
     }
   });
 
-  function addExtension() {
-    if (!newExt.trim()) return;
-    let ext = newExt.trim().toLowerCase();
-    if (!ext.startsWith('.')) ext = '.' + ext;
-    const extensions = config.files.allowed_extensions.map(value => String(value).trim().toLowerCase());
-    config.files.allowed_extensions = extensions.includes(ext) ? extensions : [...extensions, ext];
-    newExt = '';
-  }
-
-  function removeExtension(ext) {
-    const normalized = String(ext).trim().toLowerCase();
-    config.files.allowed_extensions = config.files.allowed_extensions
-      .filter(value => String(value).trim().toLowerCase() !== normalized);
-  }
-
   async function save() {
     loading = true;
     saveMsg = '';
@@ -43,7 +27,6 @@
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          files: { allowed_extensions: config.files.allowed_extensions },
           message: {
             retention_days: Number(config.message.retention_days),
             page_size: Number(config.message.page_size)
@@ -94,28 +77,6 @@
           <div class="field-row">
             <input type="number" bind:value={config.message.page_size} min="10" max="200" class="num-input" />
             <span>条</span>
-          </div>
-        </section>
-
-        <section class="setting-section">
-          <h3>允许的文件类型</h3>
-          <p class="desc">添加或移除可上传的文件扩展名；留空时禁止所有文件上传</p>
-          <div class="ext-list">
-            {#each config.files.allowed_extensions as ext}
-              <span class="ext-tag">
-                {ext}
-                <button on:click={() => removeExtension(ext)} title="移除">×</button>
-              </span>
-            {/each}
-          </div>
-          <div class="add-ext-row">
-            <input
-              type="text"
-              bind:value={newExt}
-              placeholder=".ext"
-              on:keydown={(e) => e.key === 'Enter' && addExtension()}
-            />
-            <button on:click={addExtension}>添加</button>
           </div>
         </section>
 
@@ -238,61 +199,6 @@
     outline: none;
   }
   .num-input:focus { border-color: #6366f1; }
-
-  .ext-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 10px;
-  }
-
-  .ext-tag {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    background: #f3f4f6;
-    padding: 4px 8px 4px 12px;
-    border-radius: 20px;
-    font-size: 13px;
-    color: #374151;
-  }
-
-  .ext-tag button {
-    background: none;
-    border: none;
-    color: #9ca3af;
-    cursor: pointer;
-    font-size: 16px;
-    padding: 0 2px;
-    line-height: 1;
-  }
-  .ext-tag button:hover { color: #ef4444; }
-
-  .add-ext-row {
-    display: flex;
-    gap: 8px;
-  }
-
-  .add-ext-row input {
-    flex: 1;
-    padding: 8px 12px;
-    border: 2px solid #e5e7eb;
-    border-radius: 8px;
-    font-size: 14px;
-    outline: none;
-  }
-  .add-ext-row input:focus { border-color: #6366f1; }
-
-  .add-ext-row button {
-    padding: 8px 16px;
-    background: #6366f1;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 13px;
-    min-height: 40px;
-  }
 
   .save-row {
     display: flex;

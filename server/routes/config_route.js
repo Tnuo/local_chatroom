@@ -7,8 +7,7 @@ router.get('/', (_req, res) => {
   res.json({
     server: config.server,
     message: config.message,
-    rooms: config.rooms,
-    files: config.files
+    rooms: config.rooms
   });
 });
 

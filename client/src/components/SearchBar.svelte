@@ -99,7 +99,7 @@
   {#if showResults && results.length > 0}
     <div class="results-dropdown">
       {#each results as msg}
-        <button class="result-item" on:mousedown={() => navigateTo(msg)} on:touchend={() => navigateTo(msg)}>
+        <button class="result-item" on:click={() => navigateTo(msg)}>
           <span class="result-room">#{msg.room_name}</span>
           <span class="result-text">{truncate(msg.content, 50)}</span>
           <span class="result-meta">{msg.user_nickname} · {formatTime(msg.created_at)}</span>

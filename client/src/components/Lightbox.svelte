@@ -366,8 +366,16 @@
   </a>
 
   {#if gallery.length > 1 || olderAvailable || newerAvailable}
-    <button class="nav-btn previous" class:ui-hidden={!controlsVisible} on:click={() => showItem(activeIndex - 1)} aria-label="上一张">‹</button>
-    <button class="nav-btn next" class:ui-hidden={!controlsVisible} on:click={() => showItem(activeIndex + 1)} aria-label="下一张">›</button>
+    <button class="nav-btn previous" class:ui-hidden={!controlsVisible} on:click={() => showItem(activeIndex - 1)} aria-label="上一张">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m15 18-6-6 6-6" />
+      </svg>
+    </button>
+    <button class="nav-btn next" class:ui-hidden={!controlsVisible} on:click={() => showItem(activeIndex + 1)} aria-label="下一张">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m9 18 6-6-6-6" />
+      </svg>
+    </button>
     <div class="item-count" class:ui-hidden={!controlsVisible}>{activeIndex + 1} / {gallery.length}</div>
   {/if}
 

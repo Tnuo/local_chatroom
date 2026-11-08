@@ -75,7 +75,14 @@
       {:else if (msg.type === 'file' || msg.type === 'video') && isVideo(msg.mime_type)}
         <div class="video-attachment">
           <video class="msg-video" src="/uploads/{msg.file_url}" controls preload="metadata" playsinline></video>
-          <button class="video-expand" on:click={openPreview} aria-label="放大视频" title="放大视频">⛶</button>
+          <button class="video-expand" on:click={openPreview} aria-label="放大视频" title="放大视频">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+              <path d="M16 3h3a2 2 0 0 1 2 2v3" />
+              <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
+              <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+            </svg>
+          </button>
         </div>
       {:else if (msg.type === 'file' || msg.type === 'audio') && isAudio(msg.mime_type)}
         <audio src="/uploads/{msg.file_url}" controls preload="metadata"></audio>
@@ -237,7 +244,9 @@
     border-radius: 50%;
     color: white;
     background: rgba(0, 0, 0, 0.62);
-    font-size: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
   }
 
