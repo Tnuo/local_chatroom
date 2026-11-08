@@ -27,6 +27,11 @@
     box-sizing: border-box;
   }
 
+  :global(:focus-visible) {
+    outline: 2px solid #4f46e5;
+    outline-offset: 2px;
+  }
+
   :global(body) {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     background: #f0f2f5;

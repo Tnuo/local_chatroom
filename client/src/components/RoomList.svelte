@@ -289,13 +289,13 @@
   .btn-close-sidebar {
     background: none; border: none; color: #a6adc8; cursor: pointer;
     padding: 6px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
-    min-width: 36px; min-height: 36px;
+    min-width: 44px; min-height: 44px;
   }
   .btn-close-sidebar:hover { background: #313244; color: #cdd6f4; }
 
   .btn-logout {
     background: none; border: none; color: #a6adc8; font-size: 18px; cursor: pointer;
-    padding: 4px 8px; border-radius: 6px; min-width: 40px; min-height: 40px;
+    padding: 4px 8px; border-radius: 6px; min-width: 44px; min-height: 44px;
     display: flex; align-items: center; justify-content: center;
   }
   .btn-logout:hover { background: #313244; }
@@ -310,7 +310,7 @@
 
   .btn-add-room {
     background: none; border: none; color: #a6adc8; font-size: 20px; cursor: pointer;
-    min-width: 36px; min-height: 36px; display: flex; align-items: center; justify-content: center;
+    min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center;
     border-radius: 6px;
   }
   .btn-add-room:hover { background: #313244; color: #cdd6f4; }
@@ -325,7 +325,7 @@
 
   .new-room-form button {
     padding: 10px 14px; background: #6366f1; color: white; border: none;
-    border-radius: 6px; cursor: pointer; font-size: 14px; min-height: 40px;
+    border-radius: 6px; cursor: pointer; font-size: 14px; min-height: 44px;
   }
 
   .room-list { padding: 4px 8px; }
@@ -386,7 +386,7 @@
 
   .context-menu button {
     display: flex; align-items: center; gap: 8px; width: 100%;
-    padding: 10px 12px; border: none; background: none;
+    padding: 10px 12px; border: none; background: none; min-height: 44px;
     color: #cdd6f4; cursor: pointer; border-radius: 6px;
     font-size: 14px; text-align: left;
   }

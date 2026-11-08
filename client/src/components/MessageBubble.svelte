@@ -108,10 +108,10 @@
       <div class="msg-footer">
         <span class="time">{formatTime(msg.created_at)}</span>
         {#if isMine}
-          <button class="action-btn" class:mobile-show={isMobile} on:click={togglePermanent} title={msg.is_permanent ? '取消永久保存' : '永久保存'}>
+          <button class="action-btn" class:mobile-show={isMobile} on:click={togglePermanent} title={msg.is_permanent ? '取消永久保存' : '永久保存'} aria-label={msg.is_permanent ? '取消永久保存' : '永久保存'}>
             {msg.is_permanent ? '📌' : '📍'}
           </button>
-          <button class="action-btn del-btn" class:mobile-show={isMobile} on:click={handleDelete} title="删除">
+          <button class="action-btn del-btn" class:mobile-show={isMobile} on:click={handleDelete} title="删除" aria-label="删除消息">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           </button>
         {/if}
@@ -238,8 +238,8 @@
     position: absolute;
     right: 8px;
     top: 8px;
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border: 0;
     border-radius: 50%;
     color: white;
@@ -355,6 +355,7 @@
   }
 
   .action-btn:hover { opacity: 1 !important; }
+  .action-btn:focus-visible { opacity: 1; }
   .del-btn:hover { color: #fca5a5; background: rgba(239,68,68,0.2); }
 
   :global(.highlight) {
@@ -408,5 +409,7 @@
       height: 28px;
       font-size: 11px;
     }
+
+    .action-btn { min-width: 44px; min-height: 44px; }
   }
 </style>

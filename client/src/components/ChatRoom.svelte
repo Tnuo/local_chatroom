@@ -5,6 +5,7 @@
   import { uploadAttachment } from '../utils/uploadAttachment.js';
 
   export let roomId;
+  export let roomName = '';
   export let messages = [];
   export let currentUser;
   export let onSend;
@@ -19,6 +20,9 @@
   let loadingMore = false;
   let hasMore = true;
   let prefetchHeight = 0;
+  let uploadQueue = [];
+  let uploadWorkerActive = false;
+  let nextUploadId = 0;
 
   $: if (roomId) { hasMore = true; loadingMore = false; }
 
@@ -48,31 +52,64 @@
     return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
   }
 
-  async function uploadFile(file) {
+  function updateUpload(id, updates) {
+    uploadQueue = uploadQueue.map(item => item.id === id ? { ...item, ...updates } : item);
+  }
+
+  function enqueueUploads(files) {
+    const queued = Array.from(files || []).filter(Boolean).map(file => ({
+      id: ++nextUploadId,
+      file,
+      roomId,
+      roomName,
+      status: 'queued',
+      progress: 0,
+      error: ''
+    }));
+    if (!queued.length) return;
+    uploadQueue = [...uploadQueue, ...queued];
+    processUploadQueue();
+  }
+
+  async function processUploadQueue() {
+    if (uploadWorkerActive) return;
+    uploadWorkerActive = true;
     try {
-      return await uploadAttachment(file);
-    } catch (e) {
-      alert('上传失败: ' + e.message);
-      return null;
+      while (true) {
+        const item = uploadQueue.find(upload => upload.status === 'queued');
+        if (!item) break;
+        updateUpload(item.id, { status: 'uploading', progress: 0, error: '' });
+        try {
+          const uploaded = await uploadAttachment(item.file, progress => updateUpload(item.id, { progress }));
+          onSend?.({
+            type: getAttachmentMessageType(uploaded.mimetype),
+            content: '',
+            file: uploaded
+          }, item.roomId);
+          uploadQueue = uploadQueue.filter(upload => upload.id !== item.id);
+        } catch (error) {
+          updateUpload(item.id, { status: 'failed', error: error.message || '上传失败' });
+        }
+      }
+    } finally {
+      uploadWorkerActive = false;
     }
+  }
+
+  function retryUpload(id) {
+    updateUpload(id, { status: 'queued', progress: 0, error: '' });
+    processUploadQueue();
+  }
+
+  function removeUpload(id) {
+    if (uploadQueue.some(item => item.id === id && item.status === 'uploading')) return;
+    uploadQueue = uploadQueue.filter(item => item.id !== id);
   }
 
   async function handleDrop(e) {
     e.preventDefault();
     dragOver = false;
-    for (const item of e.dataTransfer.items) {
-      if (item.kind === 'file') {
-        const file = item.getAsFile();
-        const uploaded = await uploadFile(file);
-        if (uploaded) {
-          onSend?.({
-            type: getAttachmentMessageType(uploaded.mimetype),
-            content: '',
-            file: uploaded
-          });
-        }
-      }
-    }
+    enqueueUploads(e.dataTransfer.files);
   }
 
   function handleDragOver(e) {
@@ -106,6 +143,8 @@
 <div class="chat-room">
   <div
     class="messages-container"
+    role="region"
+    aria-label="聊天消息，可拖放文件上传"
     class:drag-over={dragOver}
     bind:this={messageContainer}
     on:scroll={handleScroll}
@@ -143,7 +182,15 @@
     {/if}
   </div>
 
-  <MessageInput {onSend} {roomId} {isMobile} />
+  <MessageInput
+    {onSend}
+    {isMobile}
+    {roomId}
+    {uploadQueue}
+    onFiles={enqueueUploads}
+    onRetryUpload={retryUpload}
+    onRemoveUpload={removeUpload}
+  />
 </div>
 
 <style>

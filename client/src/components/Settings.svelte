@@ -147,8 +147,8 @@
     cursor: pointer;
     padding: 4px;
     border-radius: 6px;
-    min-width: 36px;
-    min-height: 36px;
+    min-width: 44px;
+    min-height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -192,6 +192,7 @@
 
   .num-input {
     width: 80px;
+    min-height: 44px;
     padding: 8px 12px;
     border: 2px solid #e5e7eb;
     border-radius: 8px;

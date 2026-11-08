@@ -73,7 +73,8 @@
             style="background: {color}"
             class:active={selectedColor === color}
             on:click={() => selectedColor = color}
-            aria-label="选择颜色"
+            aria-label={`选择头像颜色 ${color}`}
+            aria-pressed={selectedColor === color}
           ></button>
         {/each}
       </div>
@@ -223,8 +224,8 @@
     }
 
     .color-dot {
-      width: 40px;
-      height: 40px;
+      width: 44px;
+      height: 44px;
     }
 
     input[type="text"] {

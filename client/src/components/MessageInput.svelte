@@ -1,15 +1,13 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { getAttachmentMessageType } from '../utils/messageTypes.js';
-  import { uploadAttachment } from '../utils/uploadAttachment.js';
-
   export let onSend;
-  export let roomId;
+  export let roomId = null;
   export let isMobile = false;
+  export let uploadQueue = [];
+  export let onFiles;
+  export let onRetryUpload;
+  export let onRemoveUpload;
 
-  const dispatch = createEventDispatcher();
   let text = '';
-  let uploading = false;
   let sendError = '';
   let fileInput;
   let showEmoji = false;
@@ -35,65 +33,23 @@
     }
   }
 
-  async function uploadFile(file) {
-    uploading = true;
-    try {
-      return await uploadAttachment(file);
-    } catch (e) {
-      alert('上传失败: ' + e.message);
-      return null;
-    } finally {
-      uploading = false;
-    }
+  function handleFileSelect(e) {
+    onFiles?.(Array.from(e.currentTarget.files || []));
+    e.currentTarget.value = '';
   }
 
-  async function handleFileSelect(e) {
-    const files = e.target.files;
-    for (const file of files) {
-      const uploaded = await uploadFile(file);
-      if (uploaded) {
-        onSend?.({
-          type: getAttachmentMessageType(uploaded.mimetype),
-          content: '',
-          file: uploaded
-        });
-      }
-    }
-    if (fileInput) fileInput.value = '';
-  }
-
-  async function handleDrop(e) {
+  function handleDrop(e) {
     e.preventDefault();
-    for (const item of e.dataTransfer.items) {
-      if (item.kind === 'file') {
-        const file = item.getAsFile();
-        const uploaded = await uploadFile(file);
-        if (uploaded) {
-          onSend?.({
-            type: getAttachmentMessageType(uploaded.mimetype),
-            content: '',
-            file: uploaded
-          });
-        }
-      }
-    }
+    onFiles?.(Array.from(e.dataTransfer.files || []));
   }
 
-  async function handlePaste(e) {
+  function handlePaste(e) {
     const items = e.clipboardData?.items;
     if (!items) return;
-    for (const item of items) {
-      if (item.kind === 'file') {
-        const file = item.getAsFile();
-        const uploaded = await uploadFile(file);
-        if (uploaded) {
-          onSend?.({
-            type: getAttachmentMessageType(uploaded.mimetype),
-            content: '',
-            file: uploaded
-          });
-        }
-      }
+    const files = Array.from(items).filter(item => item.kind === 'file').map(item => item.getAsFile()).filter(Boolean);
+    if (files.length) {
+      e.preventDefault();
+      onFiles?.(files);
     }
   }
 
@@ -109,10 +65,40 @@
 </script>
 
 <div class="input-area">
+  {#if uploadQueue.length}
+    <div class="upload-queue" role="region" aria-label="文件上传队列">
+      {#each uploadQueue as item (item.id)}
+        <div class="upload-item">
+          <div class="upload-info">
+            <span class="upload-name" title={item.file.name}>{item.file.name}</span>
+            {#if item.status === 'uploading'}
+              <span class="upload-status">上传中 {item.progress}%</span>
+              <div class="upload-progress" role="progressbar" aria-label={`上传 ${item.file.name}`} aria-valuemin="0" aria-valuemax="100" aria-valuenow={item.progress}>
+                <span style={`width: ${item.progress}%`}></span>
+              </div>
+            {:else if item.status === 'queued'}
+              <span class="upload-status">等待上传</span>
+            {:else}
+              <span class="upload-error" role="alert">{item.error}</span>
+            {/if}
+            {#if item.roomId !== roomId && item.roomName}
+              <span class="upload-status">发送至 #{item.roomName}</span>
+            {/if}
+          </div>
+          {#if item.status === 'failed'}
+            <button class="upload-action retry-upload" on:click={() => onRetryUpload?.(item.id)} aria-label={`重试上传 ${item.file.name}`}>重试</button>
+          {:else if item.status === 'queued'}
+            <button class="upload-action" on:click={() => onRemoveUpload?.(item.id)} aria-label={`取消上传 ${item.file.name}`}>取消</button>
+          {/if}
+        </div>
+      {/each}
+    </div>
+  {/if}
+
   {#if showEmoji}
     <div class="emoji-panel">
       {#each EMOJIS as emoji}
-        <button class="emoji-btn" on:click={() => insertEmoji(emoji)}>{emoji}</button>
+        <button class="emoji-btn" on:click={() => insertEmoji(emoji)} aria-label={`插入表情 ${emoji}`}>{emoji}</button>
       {/each}
     </div>
   {/if}
@@ -143,6 +129,8 @@
 
     <div
       class="text-input-wrapper"
+      role="group"
+      aria-label="消息输入和文件拖放区域"
       on:dragover={(e) => e.preventDefault()}
       on:drop={handleDrop}
     >
@@ -158,11 +146,11 @@
       ></textarea>
     </div>
 
-    <button class="btn-send" on:click={sendText} disabled={uploading || !text.trim()}>
+    <button class="btn-send" on:click={sendText} disabled={!text.trim()} aria-label="发送消息">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="send-icon">
         <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
       </svg>
-      {#if uploading}{isMobile ? '…' : '上传中…'}{:else if !isMobile}发送{/if}
+      {#if !isMobile}发送{/if}
     </button>
   </div>
 </div>
@@ -173,6 +161,33 @@
     border-top: 1px solid #e5e7eb;
     padding: 8px 12px;
   }
+
+  .upload-queue {
+    display: grid;
+    gap: 6px;
+    max-height: 128px;
+    overflow-y: auto;
+    margin-bottom: 8px;
+    padding: 8px;
+    border-radius: 10px;
+    background: #f9fafb;
+  }
+
+  .upload-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .upload-info { flex: 1; min-width: 0; display: grid; gap: 3px; }
+  .upload-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #374151; }
+  .upload-status, .upload-error { font-size: 11px; color: #6b7280; }
+  .upload-error { color: #b91c1c; overflow-wrap: anywhere; }
+  .upload-progress { height: 4px; overflow: hidden; border-radius: 4px; background: #e5e7eb; }
+  .upload-progress span { display: block; height: 100%; background: #6366f1; transition: width 0.12s linear; }
+  .upload-action { min-height: 36px; padding: 4px 10px; border: 0; border-radius: 8px; color: #4b5563; background: #e5e7eb; cursor: pointer; }
+  .upload-action.retry-upload { color: #fff; background: #6366f1; }
 
   .emoji-panel {
     display: flex;
@@ -299,6 +314,9 @@
       border-radius: 50%;
       padding: 0;
     }
+
+    .emoji-btn { min-width: 44px; min-height: 44px; }
+    .upload-action { min-height: 44px; }
 
     textarea {
       font-size: 16px;

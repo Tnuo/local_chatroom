@@ -499,7 +499,7 @@
   }
   .close-btn, .download-btn, .zoom-btn, .nav-btn, .offline-btn,
   .item-count, .media-status { transition: opacity 0.16s ease; }
-  .ui-hidden { opacity: 0; pointer-events: none; }
+  .ui-hidden { opacity: 0; pointer-events: none; visibility: hidden; transition: opacity 0.16s ease, visibility 0s linear 0.16s; }
 
   .close-btn { top: max(16px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); }
   .download-btn { top: max(16px, env(safe-area-inset-top)); right: calc(max(16px, env(safe-area-inset-right)) + 56px); }

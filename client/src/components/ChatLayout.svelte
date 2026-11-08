@@ -190,13 +190,13 @@
     });
   }
 
-  function handleSendMessage(data) {
-    if (!socket?.connected || !$currentRoomId) {
+  function handleSendMessage(data, targetRoomId = $currentRoomId) {
+    if (!socket?.connected || !targetRoomId) {
       sendError = '当前未连接服务器，消息没有发送';
       return;
     }
     sendError = '';
-    socket.timeout(8000).emit('message:send', { roomId: $currentRoomId, ...data }, (timeoutError, result) => {
+    socket.timeout(8000).emit('message:send', { roomId: targetRoomId, ...data }, (timeoutError, result) => {
       if (timeoutError) {
         sendError = '发送确认超时，请检查连接后重试';
       } else if (!result?.ok) {
@@ -363,6 +363,7 @@
     {#if $currentRoomId}
       <ChatRoom
         roomId={$currentRoomId}
+        roomName={currentRoom?.name || ''}
         messages={$messages[$currentRoomId] || []}
         currentUser={$currentUser}
         onSend={handleSendMessage}
@@ -526,8 +527,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 36px;
-    min-height: 36px;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .hamburger:hover { background: #f3f4f6; }
@@ -542,8 +543,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 36px;
-    min-height: 36px;
+    min-width: 44px;
+    min-height: 44px;
   }
   .btn-settings:hover { background: #f3f4f6; color: #6366f1; }
 

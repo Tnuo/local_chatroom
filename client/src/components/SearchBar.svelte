@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { searchQuery, searchResults } from '../stores/search.js';
 
   export let onNavigate;
@@ -8,11 +8,22 @@
   let searchInput;
   let showResults = false;
   let debounceTimer;
+  let blurTimer;
+  let searchController;
+  let searchRequestId = 0;
+  let searching = false;
+  let searchError = '';
   let results = [];
 
   onMount(() => {
     window.addEventListener('keydown', handleGlobalKeydown);
     return () => window.removeEventListener('keydown', handleGlobalKeydown);
+  });
+
+  onDestroy(() => {
+    clearTimeout(debounceTimer);
+    clearTimeout(blurTimer);
+    searchController?.abort();
   });
 
   function handleGlobalKeydown(e) {
@@ -28,28 +39,52 @@
 
   function handleInput() {
     clearTimeout(debounceTimer);
+    searchController?.abort();
+    searchController = null;
+    const requestId = ++searchRequestId;
     const q = searchInput?.value?.trim();
     $searchQuery = q;
+    searchError = '';
 
     if (!q) {
       results = [];
       showResults = false;
+      searching = false;
+      searchResults.set([]);
       return;
     }
 
+    results = [];
+    searchResults.set([]);
+    showResults = true;
+    searching = true;
     debounceTimer = setTimeout(async () => {
+      const controller = new AbortController();
+      searchController = controller;
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-        results = await res.json();
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: controller.signal });
+        if (!res.ok) throw new Error('搜索暂时不可用');
+        const nextResults = await res.json();
+        if (requestId !== searchRequestId) return;
+        results = nextResults;
         searchResults.set(results);
-        showResults = true;
       } catch (e) {
-        console.error(e);
+        if (e.name !== 'AbortError' && requestId === searchRequestId) {
+          searchError = e.message || '搜索失败，请重试';
+        }
+      } finally {
+        if (requestId === searchRequestId) searching = false;
       }
     }, 200);
   }
 
   function navigateTo(msg) {
+    clearTimeout(debounceTimer);
+    searchController?.abort();
+    searchRequestId++;
+    searching = false;
+    searchError = '';
+    $searchQuery = '';
     showResults = false;
     if (searchInput) searchInput.value = '';
     results = [];
@@ -58,13 +93,15 @@
   }
 
   function handleFocus() {
-    if (searchInput?.value?.trim()) {
+    clearTimeout(blurTimer);
+    if (searchInput?.value?.trim() && (results.length || searching || searchError)) {
       showResults = true;
     }
   }
 
   function handleBlur() {
-    setTimeout(() => { showResults = false; }, 250);
+    clearTimeout(blurTimer);
+    blurTimer = setTimeout(() => { showResults = false; }, 250);
   }
 
   function truncate(text, len = 60) {
@@ -87,6 +124,8 @@
       bind:this={searchInput}
       type="search"
       placeholder="搜索消息..."
+      aria-label="搜索消息"
+      autocomplete="off"
       on:input={handleInput}
       on:focus={handleFocus}
       on:blur={handleBlur}
@@ -105,6 +144,14 @@
           <span class="result-meta">{msg.user_nickname} · {formatTime(msg.created_at)}</span>
         </button>
       {/each}
+    </div>
+  {:else if showResults && searching}
+    <div class="results-dropdown empty" role="status">
+      <p>搜索中…</p>
+    </div>
+  {:else if showResults && searchError}
+    <div class="results-dropdown empty error" role="alert">
+      <p>{searchError}</p>
     </div>
   {:else if showResults && $searchQuery}
     <div class="results-dropdown empty">
@@ -140,6 +187,7 @@
     border-radius: 8px;
     padding: 8px 12px;
     font-size: 14px;
+    min-height: 44px;
     outline: none;
     -webkit-appearance: none;
   }
@@ -177,6 +225,7 @@
     color: #9ca3af;
     font-size: 14px;
   }
+  .results-dropdown.empty.error { color: #b91c1c; }
 
   .result-item {
     display: flex;
