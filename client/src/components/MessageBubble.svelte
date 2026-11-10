@@ -45,6 +45,26 @@
   function isVideo(mime) { return getMediaKind(mime) === 'video'; }
   function isAudio(mime) { return getMediaKind(mime) === 'audio'; }
   function isPDF(mime) { return String(mime || '').toLowerCase() === 'application/pdf'; }
+
+  function linkify(text) {
+    const parts = [];
+    const pattern = /https?:\/\/[^\s<>"']+|www\.[^\s<>"']+/giu;
+    let lastIndex = 0;
+    for (const match of String(text || '').matchAll(pattern)) {
+      const raw = match[0];
+      let url = raw;
+      while (/[.,!?;:，。！？；：、]$/u.test(url)) url = url.slice(0, -1);
+      while (url.endsWith(')') && (url.match(/\(/g) || []).length < (url.match(/\)/g) || []).length) url = url.slice(0, -1);
+      if (!url) continue;
+      const start = match.index;
+      if (start > lastIndex) parts.push({ text: text.slice(lastIndex, start) });
+      parts.push({ text: url, href: /^www\./i.test(url) ? `https://${url}` : url });
+      if (url.length < raw.length) parts.push({ text: raw.slice(url.length) });
+      lastIndex = start + raw.length;
+    }
+    if (lastIndex < String(text || '').length) parts.push({ text: String(text).slice(lastIndex) });
+    return parts.length ? parts : [{ text: String(text || '') }];
+  }
 </script>
 
 <div class="msg-row" class:mine={isMine} id="msg-{msg.id}">
@@ -70,7 +90,7 @@
           <img class="msg-image" src="/uploads/{msg.file_url}" alt={msg.content} loading="lazy" />
         </button>
         {#if msg.content}
-          <div class="msg-text">{msg.content}</div>
+          <div class="msg-text">{#each linkify(msg.content) as part}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>{:else}{part.text}{/if}{/each}</div>
         {/if}
       {:else if (msg.type === 'file' || msg.type === 'video') && isVideo(msg.mime_type)}
         <div class="video-attachment">
@@ -102,7 +122,7 @@
           {/if}
         </div>
       {:else}
-        <div class="msg-text">{msg.content}</div>
+        <div class="msg-text">{#each linkify(msg.content) as part}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>{:else}{part.text}{/if}{/each}</div>
       {/if}
 
       <div class="msg-footer">
@@ -199,6 +219,17 @@
 
   .bubble.mine .msg-text {
     color: #fff;
+  }
+
+  .msg-text a {
+    color: #4f46e5;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    overflow-wrap: anywhere;
+  }
+
+  .bubble.mine .msg-text a {
+    color: #e0e7ff;
   }
 
   .msg-image {
