@@ -31,6 +31,20 @@ function toMediaItem(message) {
   };
 }
 
+router.get('/download/:id', (req, res) => {
+  const message = db.prepare('SELECT file_url, file_name FROM messages WHERE id = ?').get(req.params.id);
+  if (!message?.file_url) return res.status(404).json({ error: '文件不存在' });
+
+  const storedFilename = path.basename(message.file_url);
+  if (!storedFilename || storedFilename !== message.file_url) return res.status(404).json({ error: '文件不存在' });
+  const filePath = path.join(UPLOADS_DIR, storedFilename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: '文件不存在' });
+
+  res.download(filePath, message.file_name || storedFilename, error => {
+    if (error && !res.headersSent) res.status(error.status || 500).end();
+  });
+});
+
 router.get('/:roomId/media', (req, res) => {
   const { roomId } = req.params;
   const limit = Math.max(2, Math.min(80, Number.parseInt(req.query.limit, 10) || 40));

@@ -22,12 +22,8 @@
   let newerAvailable = hasNewer;
   let moreLoading = '';
   let moreError = loadError;
-  let cacheSaved = false;
-  let cacheSaving = false;
-  let cacheProgress = null;
-  let cacheError = '';
-  let checkedCacheUrl = '';
-  let cacheCheckId = 0;
+  let downloadBusy = false;
+  let downloadStatus = '';
   let dragY = 0;
   let closing = false;
   let closeX = 0;
@@ -42,11 +38,6 @@
 
   $: currentItem = gallery[Math.min(activeIndex, gallery.length - 1)] || { src, type, name: '' };
   $: isImage = currentItem.type === 'image';
-
-  $: if (currentItem.src && currentItem.src !== checkedCacheUrl) {
-    checkedCacheUrl = currentItem.src;
-    checkOfflineCache(currentItem.src);
-  }
 
   function resetZoom() {
     scale = 1;
@@ -110,6 +101,7 @@
     await tick();
     activeIndex = index;
     slideDirection = direction;
+    downloadStatus = '';
     resetZoom();
     preloadNeighborImages();
     slideTimer = window.setTimeout(() => slideDirection = '', 240);
@@ -271,55 +263,52 @@
     setZoom(scale + (event.deltaY < 0 ? 0.25 : -0.25));
   }
 
-  async function checkOfflineCache(url) {
-    const checkId = ++cacheCheckId;
-    cacheSaved = false;
-    cacheError = '';
-    if (!('caches' in window)) return;
-    try {
-      const cache = await caches.open('chat-uploads');
-      const cached = await cache.match(url);
-      if (checkId === cacheCheckId) cacheSaved = Boolean(cached);
-    } catch (_) {
-      if (checkId === cacheCheckId) cacheError = '无法读取离线缓存状态';
-    }
+  function triggerAttachmentDownload() {
+    const link = document.createElement('a');
+    link.href = `/api/messages/download/${encodeURIComponent(currentItem.id)}`;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   }
 
-  async function saveForOffline() {
-    if (cacheSaving || cacheSaved || !('caches' in window)) return;
-    cacheSaving = true;
-    cacheProgress = null;
-    cacheError = '';
+  async function downloadCurrentItem() {
+    if (downloadBusy) return;
+    if (!currentItem.id) {
+      downloadStatus = '无法识别这条媒体消息，请关闭后重新打开。';
+      return;
+    }
+    downloadBusy = true;
+    downloadStatus = '正在准备保存…';
     try {
-      const response = await fetch(currentItem.src);
-      if (!response.ok) throw new Error('媒体下载失败');
-      const cache = await caches.open('chat-uploads');
-      const total = Number(response.headers.get('content-length')) || 0;
-      if (response.body?.tee && total > 0) {
-        const [cacheStream, progressStream] = response.body.tee();
-        const cacheWrite = cache.put(currentItem.src, new Response(cacheStream, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: response.headers
-        }));
-        const reader = progressStream.getReader();
-        let loaded = 0;
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          loaded += value.byteLength;
-          cacheProgress = Math.min(99, Math.round(loaded / total * 100));
+      const url = `/api/messages/download/${encodeURIComponent(currentItem.id)}`;
+      if (window.isSecureContext && navigator.share && navigator.canShare) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('文件不存在或已被删除');
+        const blob = await response.blob();
+        const file = new File([blob], currentItem.name || `media-${currentItem.id}`, {
+          type: blob.type || response.headers.get('content-type') || 'application/octet-stream'
+        });
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: file.name });
+            downloadStatus = '已打开系统分享面板，请选择保存位置。';
+            return;
+          } catch (error) {
+            if (error.name === 'AbortError') {
+              downloadStatus = '';
+              return;
+            }
+          }
         }
-        await cacheWrite;
-        cacheProgress = 100;
-      } else {
-        await cache.put(currentItem.src, response.clone());
       }
-      cacheSaved = true;
+      triggerAttachmentDownload();
+      downloadStatus = '已交给系统下载，请在“文件”App 的“下载项”中查看。';
     } catch (error) {
-      cacheError = error.message || '离线保存失败';
+      downloadStatus = error.message || '文件保存失败';
     } finally {
-      cacheSaving = false;
+      downloadBusy = false;
     }
   }
 
@@ -355,15 +344,11 @@
     </button>
   {/if}
 
-  <button class="offline-btn" class:saved={cacheSaved} class:ui-hidden={!controlsVisible} on:click={saveForOffline} disabled={cacheSaved || cacheSaving || !('caches' in window)} aria-label={cacheSaved ? '已保存到离线缓存' : '保存媒体供离线查看'}>
-    {cacheSaved ? '已离线' : cacheSaving ? (cacheProgress === null ? '保存中…' : `保存中 ${cacheProgress}%`) : '离线保存'}
-  </button>
-
-  <a class="download-btn" class:ui-hidden={!controlsVisible} href={currentItem.src} download={currentItem.name || undefined} title="下载文件" aria-label="下载文件">
+  <button class="download-btn" class:ui-hidden={!controlsVisible} on:click={downloadCurrentItem} disabled={downloadBusy} title="保存或分享文件" aria-label="保存或分享文件">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
     </svg>
-  </a>
+  </button>
 
   {#if gallery.length > 1 || olderAvailable || newerAvailable}
     <button class="nav-btn previous" class:ui-hidden={!controlsVisible} on:click={() => showItem(activeIndex - 1)} aria-label="上一张">
@@ -381,8 +366,10 @@
 
   {#if moreLoading}
     <div class="media-status" class:ui-hidden={!controlsVisible} role="status">正在加载{moreLoading === 'older' ? '更早' : '更新'}媒体…</div>
-  {:else if moreError || cacheError}
-    <div class="media-status error" class:ui-hidden={!controlsVisible} role="status">{moreError || cacheError}</div>
+  {:else if downloadStatus}
+    <div class="media-status" class:ui-hidden={!controlsVisible} role="status">{downloadStatus}</div>
+  {:else if moreError}
+    <div class="media-status error" class:ui-hidden={!controlsVisible} role="status">{moreError}</div>
   {/if}
 
   <div
@@ -481,7 +468,7 @@
 
   .preview-video { max-width: 100%; max-height: 100%; border-radius: 4px; background: #000; }
 
-  .close-btn, .download-btn, .zoom-btn, .nav-btn, .offline-btn {
+  .close-btn, .download-btn, .zoom-btn, .nav-btn {
     position: absolute;
     z-index: 501;
     width: 44px;
@@ -497,16 +484,14 @@
     backdrop-filter: blur(8px);
     text-decoration: none;
   }
-  .close-btn, .download-btn, .zoom-btn, .nav-btn, .offline-btn,
+  .close-btn, .download-btn, .zoom-btn, .nav-btn,
   .item-count, .media-status { transition: opacity 0.16s ease; }
   .ui-hidden { opacity: 0; pointer-events: none; visibility: hidden; transition: opacity 0.16s ease, visibility 0s linear 0.16s; }
 
   .close-btn { top: max(16px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); }
   .download-btn { top: max(16px, env(safe-area-inset-top)); right: calc(max(16px, env(safe-area-inset-right)) + 56px); }
   .zoom-btn { top: max(16px, env(safe-area-inset-top)); right: calc(max(16px, env(safe-area-inset-right)) + 112px); font-size: 28px; }
-  .offline-btn { top: max(16px, env(safe-area-inset-top)); right: calc(max(16px, env(safe-area-inset-right)) + 168px); width: auto; padding: 0 12px; border-radius: 22px; font-size: 12px; }
-  .offline-btn.saved { background: rgba(16,185,129,0.88); }
-  .offline-btn:disabled { opacity: 0.85; cursor: default; }
+  .download-btn:disabled { opacity: 0.65; cursor: wait; }
   .nav-btn { top: 50%; transform: translateY(-50%); font-size: 40px; line-height: 1; }
   .nav-btn.previous { left: max(18px, env(safe-area-inset-left)); }
   .nav-btn.next { right: max(18px, env(safe-area-inset-right)); }
@@ -529,7 +514,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .lightbox-content.slide-next, .lightbox-content.slide-previous,
-    .close-btn, .download-btn, .zoom-btn, .nav-btn, .offline-btn,
+    .close-btn, .download-btn, .zoom-btn, .nav-btn,
     .item-count, .media-status { animation-duration: 0.01ms; transition-duration: 0.01ms; }
   }
 </style>
