@@ -32,7 +32,7 @@ function toMediaItem(message) {
 }
 
 router.get('/download/:id', (req, res) => {
-  const message = db.prepare('SELECT file_url, file_name FROM messages WHERE id = ?').get(req.params.id);
+  const message = db.prepare('SELECT file_url, file_name, mime_type FROM messages WHERE id = ?').get(req.params.id);
   if (!message?.file_url) return res.status(404).json({ error: '文件不存在' });
 
   const storedFilename = path.basename(message.file_url);
@@ -40,7 +40,9 @@ router.get('/download/:id', (req, res) => {
   const filePath = path.join(UPLOADS_DIR, storedFilename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: '文件不存在' });
 
-  res.download(filePath, message.file_name || storedFilename, error => {
+  res.attachment(message.file_name || storedFilename);
+  res.type(message.mime_type || path.extname(message.file_name || storedFilename));
+  res.sendFile(filePath, { acceptRanges: true }, error => {
     if (error && !res.headersSent) res.status(error.status || 500).end();
   });
 });

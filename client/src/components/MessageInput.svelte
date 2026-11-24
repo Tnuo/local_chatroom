@@ -1,4 +1,6 @@
 <script>
+  import { tick } from 'svelte';
+
   export let onSend;
   export let roomId = null;
   export let isMobile = false;
@@ -11,6 +13,11 @@
   let sendError = '';
   let fileInput;
   let showEmoji = false;
+  let editorExpanded = false;
+  let compactTextarea;
+  let expandedTextarea;
+  let showExpandButton = false;
+  let cursorPosition = 0;
 
   function sendText() {
     if (!text.trim()) return;
@@ -24,6 +31,8 @@
     }
     text = '';
     showEmoji = false;
+    editorExpanded = false;
+    tick().then(resizeCompactTextarea);
   }
 
   function handleKeydown(e) {
@@ -31,6 +40,45 @@
       e.preventDefault();
       sendText();
     }
+  }
+
+  function handleExpandedKeydown(e) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeExpandedEditor();
+    } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      sendText();
+    }
+  }
+
+  function resizeCompactTextarea() {
+    if (!compactTextarea) return;
+    compactTextarea.style.height = 'auto';
+    const maxHeight = 120;
+    compactTextarea.style.height = `${Math.min(compactTextarea.scrollHeight, maxHeight)}px`;
+    showExpandButton = Boolean(text) && compactTextarea.scrollHeight > maxHeight + 1;
+  }
+
+  function handleCompactInput() {
+    requestAnimationFrame(resizeCompactTextarea);
+  }
+
+  async function openExpandedEditor() {
+    cursorPosition = compactTextarea?.selectionStart ?? text.length;
+    editorExpanded = true;
+    await tick();
+    expandedTextarea?.focus();
+    expandedTextarea?.setSelectionRange(cursorPosition, cursorPosition);
+  }
+
+  async function closeExpandedEditor() {
+    cursorPosition = expandedTextarea?.selectionStart ?? text.length;
+    editorExpanded = false;
+    await tick();
+    resizeCompactTextarea();
+    compactTextarea?.focus();
+    compactTextarea?.setSelectionRange(cursorPosition, cursorPosition);
   }
 
   function handleFileSelect(e) {
@@ -57,6 +105,7 @@
 
   function insertEmoji(emoji) {
     text += emoji;
+    tick().then(resizeCompactTextarea);
   }
 
   function toggleEmoji() {
@@ -65,6 +114,29 @@
 </script>
 
 <div class="input-area">
+  {#if editorExpanded}
+    <section class="expanded-editor" role="dialog" aria-modal="true" aria-label="全屏编辑消息">
+      <header class="expanded-editor-header">
+        <button class="editor-close" on:click={closeExpandedEditor} aria-label="收起编辑器">收起</button>
+        <span>编辑消息</span>
+        <button class="editor-send" on:click={sendText} disabled={!text.trim()} aria-label="发送消息">发送</button>
+      </header>
+      <textarea
+        bind:this={expandedTextarea}
+        bind:value={text}
+        on:keydown={handleExpandedKeydown}
+        on:paste={handlePaste}
+        placeholder="输入消息…"
+        aria-label="全屏编辑消息"
+        inputmode="text"
+      ></textarea>
+      <footer class="expanded-editor-footer">
+        <span>{text.length} 字</span>
+        <span>{isMobile ? '回车换行 · 点发送发送' : '回车换行 · Ctrl/⌘ + Enter 发送'}</span>
+      </footer>
+    </section>
+  {/if}
+
   {#if uploadQueue.length}
     <div class="upload-queue" role="region" aria-label="文件上传队列">
       {#each uploadQueue as item (item.id)}
@@ -134,16 +206,26 @@
       on:dragover={(e) => e.preventDefault()}
       on:drop={handleDrop}
     >
-      <textarea
-        bind:value={text}
-        on:keydown={handleKeydown}
-        on:paste={handlePaste}
-        placeholder={isMobile ? '输入消息...' : '输入消息... (Enter 发送)'}
-        rows="1"
-        aria-label="输入消息"
-        inputmode="text"
-        enterkeyhint="send"
-      ></textarea>
+      {#if !editorExpanded}
+        <textarea
+          bind:this={compactTextarea}
+          bind:value={text}
+          class:has-expand={showExpandButton}
+          on:input={handleCompactInput}
+          on:keydown={handleKeydown}
+          on:paste={handlePaste}
+          placeholder={isMobile ? '输入消息...' : '输入消息... (Enter 发送)'}
+          rows="1"
+          aria-label="输入消息"
+          inputmode="text"
+          enterkeyhint="send"
+        ></textarea>
+        {#if showExpandButton}
+          <button class="expand-editor" on:click={openExpandedEditor} aria-label="全屏编辑草稿" title="全屏编辑">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+          </button>
+        {/if}
+      {/if}
     </div>
 
     <button class="btn-send" on:click={sendText} disabled={!text.trim()} aria-label="发送消息">
@@ -248,6 +330,8 @@
 
   .text-input-wrapper {
     flex: 1;
+    min-width: 0;
+    position: relative;
   }
 
   textarea {
@@ -267,6 +351,104 @@
 
   textarea:focus {
     border-color: #6366f1;
+  }
+
+  textarea.has-expand {
+    padding-right: 58px;
+  }
+
+  .expand-editor {
+    position: absolute;
+    right: 6px;
+    top: 6px;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 9px;
+    color: #4b5563;
+    background: rgba(255,255,255,.94);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
+
+  .expanded-editor {
+    position: fixed;
+    inset: 0;
+    height: 100vh;
+    height: 100dvh;
+    z-index: 1200;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    color: #111827;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .expanded-editor-header,
+  .expanded-editor-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+  }
+
+  .expanded-editor-header {
+    min-height: 56px;
+    border-bottom: 1px solid #e5e7eb;
+    font-weight: 600;
+  }
+
+  .expanded-editor-header button {
+    min-width: 64px;
+    min-height: 44px;
+    border: 0;
+    border-radius: 10px;
+    padding: 0 12px;
+    color: #4f46e5;
+    background: #eef2ff;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .expanded-editor-header .editor-send {
+    color: #fff;
+    background: #4f46e5;
+  }
+
+  .expanded-editor-header .editor-send:disabled {
+    opacity: .4;
+  }
+
+  .expanded-editor textarea {
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    max-height: none;
+    resize: none;
+    border: 0;
+    border-radius: 0;
+    padding: 20px;
+    outline: none;
+    color: #111827;
+    background: #fff;
+    font-family: inherit;
+    font-size: 17px;
+    line-height: 1.65;
+    overflow-y: auto;
+  }
+
+  .expanded-editor textarea:focus {
+    border: 0;
+  }
+
+  .expanded-editor-footer {
+    min-height: 42px;
+    border-top: 1px solid #e5e7eb;
+    color: #6b7280;
+    font-size: 12px;
   }
 
   .btn-send {

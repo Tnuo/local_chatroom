@@ -22,7 +22,6 @@
   let newerAvailable = hasNewer;
   let moreLoading = '';
   let moreError = loadError;
-  let downloadBusy = false;
   let downloadStatus = '';
   let dragY = 0;
   let closing = false;
@@ -263,53 +262,13 @@
     setZoom(scale + (event.deltaY < 0 ? 0.25 : -0.25));
   }
 
-  function triggerAttachmentDownload() {
-    const link = document.createElement('a');
-    link.href = `/api/messages/download/${encodeURIComponent(currentItem.id)}`;
-    link.target = '_blank';
-    link.rel = 'noopener';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  }
-
-  async function downloadCurrentItem() {
-    if (downloadBusy) return;
+  function handleDownloadClick(event) {
     if (!currentItem.id) {
+      event.preventDefault();
       downloadStatus = '无法识别这条媒体消息，请关闭后重新打开。';
       return;
     }
-    downloadBusy = true;
-    downloadStatus = '正在准备保存…';
-    try {
-      const url = `/api/messages/download/${encodeURIComponent(currentItem.id)}`;
-      if (window.isSecureContext && navigator.share && navigator.canShare) {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('文件不存在或已被删除');
-        const blob = await response.blob();
-        const file = new File([blob], currentItem.name || `media-${currentItem.id}`, {
-          type: blob.type || response.headers.get('content-type') || 'application/octet-stream'
-        });
-        if (navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ files: [file], title: file.name });
-            downloadStatus = '已打开系统分享面板，请选择保存位置。';
-            return;
-          } catch (error) {
-            if (error.name === 'AbortError') {
-              downloadStatus = '';
-              return;
-            }
-          }
-        }
-      }
-      triggerAttachmentDownload();
-      downloadStatus = '已交给系统下载，请在“文件”App 的“下载项”中查看。';
-    } catch (error) {
-      downloadStatus = error.message || '文件保存失败';
-    } finally {
-      downloadBusy = false;
-    }
+    downloadStatus = '已请求下载。请在“文件”App 的“下载项”中查看；兼容的视频可从文件中打开后选择“存储视频”。';
   }
 
   onMount(() => {
@@ -344,11 +303,11 @@
     </button>
   {/if}
 
-  <button class="download-btn" class:ui-hidden={!controlsVisible} on:click={downloadCurrentItem} disabled={downloadBusy} title="保存或分享文件" aria-label="保存或分享文件">
+  <a class="download-btn" class:ui-hidden={!controlsVisible} href={currentItem.id ? `/api/messages/download/${encodeURIComponent(currentItem.id)}` : undefined} target="_blank" rel="noopener" on:click={handleDownloadClick} title="下载到文件" aria-label="下载到文件">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
     </svg>
-  </button>
+  </a>
 
   {#if gallery.length > 1 || olderAvailable || newerAvailable}
     <button class="nav-btn previous" class:ui-hidden={!controlsVisible} on:click={() => showItem(activeIndex - 1)} aria-label="上一张">
@@ -491,7 +450,6 @@
   .close-btn { top: max(16px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); }
   .download-btn { top: max(16px, env(safe-area-inset-top)); right: calc(max(16px, env(safe-area-inset-right)) + 56px); }
   .zoom-btn { top: max(16px, env(safe-area-inset-top)); right: calc(max(16px, env(safe-area-inset-right)) + 112px); font-size: 28px; }
-  .download-btn:disabled { opacity: 0.65; cursor: wait; }
   .nav-btn { top: 50%; transform: translateY(-50%); font-size: 40px; line-height: 1; }
   .nav-btn.previous { left: max(18px, env(safe-area-inset-left)); }
   .nav-btn.next { right: max(18px, env(safe-area-inset-right)); }

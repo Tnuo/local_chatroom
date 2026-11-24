@@ -1,5 +1,5 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onDestroy, tick } from 'svelte';
   import { getMediaKind } from '../utils/messageTypes.js';
 
   export let msg;
@@ -10,6 +10,136 @@
   export let isMobile = false;
 
   const dispatch = createEventDispatcher();
+  let messageTextElement;
+  let readerTextElement;
+  let readerCloseButton;
+  let readerOpen = false;
+  let copiedText = false;
+  let copyHint = '';
+  let longPressTimer;
+  let touchOrigin;
+  let longPressTriggered = false;
+  let lastTapAt = 0;
+
+  function openTextReader() {
+    if (msg.type !== 'text' || readerOpen) return;
+    readerOpen = true;
+    copiedText = false;
+    copyHint = '';
+    tick().then(() => {
+      document.addEventListener('keydown', handleReaderKeydown);
+      readerCloseButton?.focus();
+    });
+  }
+
+  function handleTextDoubleClick(event) {
+    if (event.target.closest('a, button')) return;
+    if (msg.type !== 'text') return;
+    event.preventDefault();
+    openTextReader();
+  }
+
+  function handleTextTouchStart(event) {
+    if (!isMobile || msg.type !== 'text' || event.touches.length !== 1 || event.target.closest('a, button')) return;
+    const touch = event.touches[0];
+    touchOrigin = { x: touch.clientX, y: touch.clientY };
+    longPressTriggered = false;
+    clearTimeout(longPressTimer);
+    longPressTimer = window.setTimeout(() => {
+      if (!messageTextElement) return;
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(messageTextElement);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      longPressTriggered = true;
+      lastTapAt = 0;
+    }, 550);
+  }
+
+  function handleTextTouchMove(event) {
+    if (!touchOrigin || !event.touches.length) return;
+    const touch = event.touches[0];
+    if (Math.hypot(touch.clientX - touchOrigin.x, touch.clientY - touchOrigin.y) > 10) {
+      clearTimeout(longPressTimer);
+      touchOrigin = null;
+    }
+  }
+
+  function handleTextTouchEnd(event) {
+    clearTimeout(longPressTimer);
+    touchOrigin = null;
+    if (longPressTriggered) {
+      longPressTriggered = false;
+      return;
+    }
+    if (!isMobile || msg.type !== 'text' || event.target.closest('a, button')) return;
+    const now = Date.now();
+    if (now - lastTapAt < 340) {
+      event.preventDefault();
+      lastTapAt = 0;
+      openTextReader();
+    } else {
+      lastTapAt = now;
+    }
+  }
+
+  async function copyReaderText() {
+    const content = String(msg.content || '');
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');
+      await navigator.clipboard.writeText(content);
+      copiedText = true;
+      copyHint = '已复制全文';
+      return;
+    } catch (_) {
+      const copyField = document.createElement('textarea');
+      copyField.value = content;
+      copyField.setAttribute('readonly', '');
+      copyField.style.position = 'fixed';
+      copyField.style.left = '-9999px';
+      document.body.appendChild(copyField);
+      copyField.focus();
+      copyField.select();
+      try {
+        copiedText = document.execCommand('copy');
+      } catch (_) {
+        copiedText = false;
+      }
+      copyField.remove();
+      if (copiedText) {
+        copyHint = '已复制全文';
+      } else {
+        const range = document.createRange();
+        range.selectNodeContents(readerTextElement);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        copyHint = '文字已全选，请使用系统菜单复制';
+      }
+    }
+  }
+
+  function handleReaderKeydown(event) {
+    if (event.key === 'Escape') closeTextReader();
+  }
+
+  function closeTextReader() {
+    readerOpen = false;
+    document.removeEventListener('keydown', handleReaderKeydown);
+  }
+
+  function cancelTextTouch() {
+    clearTimeout(longPressTimer);
+    touchOrigin = null;
+    longPressTriggered = false;
+    lastTapAt = 0;
+  }
+
+  onDestroy(() => {
+    clearTimeout(longPressTimer);
+    document.removeEventListener('keydown', handleReaderKeydown);
+  });
 
   function formatTime(iso) {
     if (!iso) return '';
@@ -122,7 +252,17 @@
           {/if}
         </div>
       {:else}
-        <div class="msg-text">{#each linkify(msg.content) as part}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>{:else}{part.text}{/if}{/each}</div>
+        <div
+          class="msg-text"
+          role="group"
+          aria-label="消息正文，双击大字查看，长按全选"
+          bind:this={messageTextElement}
+          on:dblclick={handleTextDoubleClick}
+          on:touchstart={handleTextTouchStart}
+          on:touchmove={handleTextTouchMove}
+          on:touchend|nonpassive={handleTextTouchEnd}
+          on:touchcancel={cancelTextTouch}
+        >{#each linkify(msg.content) as part}{#if part.href}<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>{:else}{part.text}{/if}{/each}</div>
       {/if}
 
       <div class="msg-footer">
@@ -139,6 +279,20 @@
     </div>
   </div>
 </div>
+
+{#if readerOpen}
+  <div class="text-reader-overlay" role="presentation">
+    <section class="text-reader" role="dialog" aria-modal="true" aria-label="大字查看消息" aria-keyshortcuts="Escape">
+      <header class="text-reader-header">
+        <button bind:this={readerCloseButton} on:click={closeTextReader} aria-label="关闭大字查看">关闭</button>
+        <strong>消息内容</strong>
+        <button class="copy-full-text" on:click={copyReaderText} aria-label="复制全文">{copiedText ? '已复制' : '复制全文'}</button>
+      </header>
+      <div class="text-reader-content" bind:this={readerTextElement}>{msg.content}</div>
+      {#if copyHint}<div class="copy-hint" role="status">{copyHint}</div>{/if}
+    </section>
+  </div>
+{/if}
 
 <style>
   .msg-row {
@@ -215,6 +369,8 @@
     word-break: break-word;
     color: #1f2937;
     white-space: pre-wrap;
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   .bubble.mine .msg-text {
@@ -230,6 +386,73 @@
 
   .bubble.mine .msg-text a {
     color: #e0e7ff;
+  }
+
+  .text-reader-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+    background: #fff;
+  }
+
+  .text-reader {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    background: #fff;
+    color: #111827;
+  }
+
+  .text-reader-header {
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 14px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .text-reader-header button {
+    min-width: 64px;
+    min-height: 44px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 10px;
+    color: #4f46e5;
+    background: #eef2ff;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .text-reader-header .copy-full-text {
+    color: #fff;
+    background: #4f46e5;
+  }
+
+  .text-reader-content {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: clamp(24px, 7vw, 48px);
+    font-size: clamp(24px, 7vw, 38px);
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+    -webkit-user-select: text;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .copy-hint {
+    padding: 8px 16px max(12px, env(safe-area-inset-bottom));
+    color: #4b5563;
+    background: #f9fafb;
+    text-align: center;
+    font-size: 13px;
   }
 
   .msg-image {
